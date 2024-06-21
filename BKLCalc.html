@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Land Area Calculator</title>
+<style type = text/css>
+body {
+  font-family: sans-serif;
+  background-color: #f0f0f0;
+font-size: 30px;
+}
+
+.container {
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+  background-color: #fff;
+  border-radius: 5px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+.row {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 40px;
+}
+
+.row label {
+  width: 20%;
+  text-align: right;
+  margin-right: 10px;
+}
+
+.row input {
+  width: 20%;
+  padding: 5px;
+  border-radius: 5px;
+  font-size: 25px;
+margin-right: 20px;
+}
+
+.row button {
+  width: 20%;
+  padding: 10px;
+  border-radius: 5px;
+  font-size: 20px;
+  border-color: gray;
+}
+
+#add {
+  background-color: green;
+  color: white;
+}
+
+#subtract {
+  background-color: lightcoral;
+  color: white;
+
+#clear1, #clear2, #clrresult, #AddSubtractResult, #ClearAll {
+ background-color: default;
+ margin: 10px;
+}
+</style>
+
+</head>
+<body>
+  <h1 style="text-align: center;">Land Area Calculator</h1>
+  <div class="container">
+    <div class="row">
+      <label for="bigha1">Bigha</label>
+      <input type="number" id="bigha1" value="0">
+      <label for="katha1">Katha</label>
+      <input type="number" id="katha1" value="0">
+      <label for="lessa1">Lessa</label>
+      <input type="number" id="lessa1" value="0">
+	  <button id="clear1">CLEAR</button>
+    </div>
+    <div class="row">
+      <label for="bigha2">Bigha</label>
+      <input type="number" id="bigha2" value="0">
+      <label for="katha2">Katha</label>
+      <input type="number" id="katha2" value="0">
+      <label for="lessa2">Lessa</label>
+      <input type="number" id="lessa2" value="0">
+	  <button id="clear2">CLEAR</button>
+	</div>
+    <div class="row">
+      <button id="add">ADD</button>
+      <button id="subtract">SUBTRACT</button>
+    </div>
+
+	<table style="width: 803px; height: 63px;">
+	<tbody>
+		<tr>
+			<td rowspan="1" colspan="3" style="line-height: 100%;">
+			<h5 style="text-align: center;"><span style="color: rgb(65, 65, 65); font-size: 30px">RESULT</span></h5>
+			</td>
+		</tr>
+		<tr>
+			<td style="text-align: center; ">Bigha</td>
+			<td style="text-align: center; ">Katha</td>
+			<td style="text-align: center; ">Lessa</td>
+		</tr>
+		<tr>
+			<td id="result-bigha"; style="text-align: center;"></td>
+			<td id="result-katha"; style="text-align: center;"></td>
+			<td id="result-lessa"; style="text-align: center;"></td>
+		</tr>
+		</tbody>
+</table>
+<p>&nbsp;</p>
+<div class="row">
+      <button id="AddSubtractResult">+/- Result</button>
+	  <button id="clrresult">Clear Result</button>
+	  <button id="ClearAll">Clear All</button>
+</div>
+</div>
+
+  <script>
+const addButton = document.getElementById('add');
+const subtractButton = document.getElementById('subtract');
+
+addButton.addEventListener('click', calculate);
+subtractButton.addEventListener('click', calculate);
+
+function calculate(event) {
+
+	const bigha1 = document.getElementById('bigha1').value;
+	const katha1 = document.getElementById('katha1').value;
+	const lessa1 = document.getElementById('lessa1').value;
+	const bigha2 = document.getElementById('bigha2').value;
+	const katha2 = document.getElementById('katha2').value;
+	const lessa2 = document.getElementById('lessa2').value;
+  
+	let bighaResult = 0;
+	let kathaResult = 0;
+	let lessaResult = 0;
+
+	if (event.target.id === 'add') {
+		bighaResult = Number(bigha1) + Number(bigha2);
+		kathaResult = Number(katha1) + Number(katha2);
+		lessaResult = Number(lessa1) + Number(lessa2);
+	} else if (event.target.id === 'subtract') {
+		bighaResult = Number(bigha1) - Number(bigha2);
+		kathaResult = Number(katha1) - Number(katha2);
+		lessaResult = Number(lessa1) - Number(lessa2);
+	}
+
+	// Normalize the result to the smallest unit (lessa)
+	while (lessaResult < 0) {
+		lessaResult += 20;
+		kathaResult -= 1;
+	}
+	while (kathaResult < 0) {
+		kathaResult += 5;
+		bighaResult -= 1;
+	}
+
+	// Convert the result back to the larger units
+	while (lessaResult >= 20) {
+		lessaResult -= 20;
+		kathaResult += 1;
+	}
+	while (kathaResult >= 5) {
+		kathaResult -= 5;
+		bighaResult += 1;
+	}
+
+	document.getElementById('result-bigha').textContent = bighaResult;
+	document.getElementById('result-katha').textContent = kathaResult;
+	document.getElementById('result-lessa').textContent = lessaResult;
+}
+
+// function to clear first row
+document.getElementById("clear1").addEventListener("click", function() {
+  document.getElementById("bigha1").value = "0";
+  document.getElementById("katha1").value = "0";
+  document.getElementById("lessa1").value = "0";
+});
+
+// function to clear second row
+document.getElementById("clear2").addEventListener("click", function() {
+  document.getElementById("bigha2").value = "0";
+  document.getElementById("katha2").value = "0";
+  document.getElementById("lessa2").value = "0";
+});
+
+// function to clear all result
+document.getElementById("clrresult").addEventListener("click", function() {
+  document.getElementById("result-bigha").innerHTML = '';
+  document.getElementById("result-katha").innerHTML = '';
+  document.getElementById("result-lessa").innerHTML = '';
+});
+
+// function to clear all rows
+document.getElementById("ClearAll").addEventListener("click", function() {
+  document.getElementById("bigha1").value = "0";
+  document.getElementById("katha1").value = "0";
+  document.getElementById("lessa1").value = "0";
+  document.getElementById("bigha2").value = "0";
+  document.getElementById("katha2").value = "0";
+  document.getElementById("lessa2").value = "0";
+  document.getElementById("result-bigha").innerHTML = '';
+  document.getElementById("result-katha").innerHTML = '';
+  document.getElementById("result-lessa").innerHTML = '';
+});
+
+// function that runs when +/- result is pressed
+document.getElementById("AddSubtractResult").addEventListener("click", function() {
+
+	bigha1 = document.getElementById("result-bigha").innerHTML;
+	katha1 = document.getElementById("result-katha").innerHTML;
+	lessa1 = document.getElementById("result-lessa").innerHTML;
+	
+	console.log(bigha1);
+	//bigha1.setAttribute("value", document.getElementById("result-bigha"));
+	//katha1.setAttribute("value", document.getElementById("result-katha"));
+	//lessa1.setAttribute("value", document.getElementById("result-lessa"));
+	
+	// change the first row
+	document.getElementById('bigha1').value = bigha1;
+	document.getElementById('katha1').value = katha1;
+	document.getElementById('lessa1').value = lessa1;
+	
+	// change the second row
+	document.getElementById('bigha2').value = 0;
+	document.getElementById('katha2').value = 0;
+	document.getElementById('lessa2').value = 0;
+	
+	// clear the results
+	document.getElementById("result-bigha").innerHTML = '';
+	document.getElementById("result-katha").innerHTML = '';
+	document.getElementById("result-lessa").innerHTML = '';
+	
+	//bigha1.setAttribute("value", "0");
+	//katha1.setAttribute("value", "0");
+	//lessa1.setAttribute("value", "0");
+});
+
+
+  </script>
+</body>
+</html>
