@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Age Calculator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        .container {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            width: 300px;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .input-group {
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+        }
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+        }
+        input[type="text"] {
+            flex-grow: 1;
+            padding: 0.5rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            margin-right: 0.5rem;
+        }
+        button {
+            padding: 0.5rem;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .reset-btn {
+            background-color: #f44336;
+        }
+        .reset-btn:hover {
+            background-color: #d32f2f;
+        }
+        #result {
+            margin-top: 1rem;
+            padding: 1rem;
+            background-color: #e9e9e9;
+            border-radius: 4px;
+        }
+        .button-group {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 1rem;
+        }
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        .checkbox-group input[type="checkbox"] {
+            margin-right: 0.5rem;
+        }
+        ul {
+            list-style-type: none; /* Removes default bullets */
+        }
+        li {
+            background-color: #f0f0f0; /* Light grey background */
+            padding: 10px; /* Adds padding */
+            margin: 5px 0; /* Adds margin between items */
+            border: 1px solid #ccc; /* Adds border */
+            border-radius: 5px; /* Rounds corners */
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Age Calculator</h1>
+        <div class="input-group">
+            <input type="text" id="startDate" placeholder="DDMMYYYY">
+            <button class="reset-btn" onclick="resetInput('startDate')">Reset</button>
+        </div>
+        <div class="input-group">
+            <input type="text" id="endDate" placeholder="DDMMYYYY">
+            <button class="reset-btn" onclick="resetInput('endDate')">Reset</button>
+        </div>
+        <div class="checkbox-group">
+            <input type="checkbox" id="dateInclusive">
+            <label for="dateInclusive">Date Inclusive</label>
+        </div>
+        <button id="calculateBtn">Calculate Age</button>
+        <div id="result"></div>
+        <div class="button-group">
+            <button class="reset-btn" onclick="resetResult()">Reset Result</button>
+            <button class="reset-btn" onclick="resetAll()">Reset All</button>
+        </div>
+        <br>
+        <ul>
+            <li>Item 1</li>
+            <li>Item 2</li>
+            <li>Item 3</li>
+        </ul>
+        <a href="Time-Calculator.html">Time Calculator</a>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const startDateInput = document.getElementById('startDate');
+            const endDateInput = document.getElementById('endDate');
+            const calculateBtn = document.getElementById('calculateBtn');
+
+            startDateInput.addEventListener('input', formatDateInput);
+            endDateInput.addEventListener('input', formatDateInput);
+            calculateBtn.addEventListener('click', calculateAge);
+        });
+
+        function formatDateInput(event) {
+            let input = event.target;
+            let value = input.value.replace(/\D/g, '').slice(0, 8);
+            let formattedValue = '';
+
+            if (value.length > 0) {
+                formattedValue = value.match(/^(\d{0,2})(\d{0,2})(\d{0,4})$/).slice(1).join('/');
+            }
+
+            input.value = formattedValue;
+        }
+
+        function calculateAge() {
+            const startDateStr = document.getElementById('startDate').value;
+            const endDateStr = document.getElementById('endDate').value;
+            const dateInclusive = document.getElementById('dateInclusive').checked;
+
+            const dateRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+            if (!dateRegex.test(startDateStr) || !dateRegex.test(endDateStr)) {
+                alert('Please enter dates in the format DD/MM/YYYY');
+                return;
+            }
+
+            const [, startDay, startMonth, startYear] = startDateStr.match(dateRegex);
+            const [, endDay, endMonth, endYear] = endDateStr.match(dateRegex);
+
+            const startDate = new Date(startYear, startMonth - 1, startDay);
+            const endDate = new Date(endYear, endMonth - 1, endDay);
+
+            if (startDate > endDate) {
+                alert('Start date cannot be after end date');
+                return;
+            }
+
+            let diffTime = Math.abs(endDate - startDate);
+            if (dateInclusive) {
+                diffTime += 24 * 60 * 60 * 1000; // Add one day if date inclusive
+            }
+            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+            let years = endDate.getFullYear() - startDate.getFullYear();
+            let months = endDate.getMonth() - startDate.getMonth();
+            let days = endDate.getDate() - startDate.getDate();
+
+            if (dateInclusive) {
+                days += 1;
+            }
+
+            if (days < 0) {
+                months--;
+                days += new Date(endDate.getFullYear(), endDate.getMonth(), 0).getDate();
+            }
+            if (months < 0) {
+                years--;
+                months += 12;
+            }
+
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = `
+                <p><strong>Years-Months-Days:</strong> ${years} years, ${months} months, ${days} days</p>
+                <p><strong>Total Days:</strong> ${diffDays} days</p>
+            `;
+        }
+
+        function resetInput(inputId) {
+            document.getElementById(inputId).value = '';
+        }
+
+        function resetResult() {
+            document.getElementById('result').innerHTML = '';
+        }
+
+        function resetAll() {
+            resetInput('startDate');
+            resetInput('endDate');
+            document.getElementById('dateInclusive').checked = false;
+            resetResult();
+        }
+    </script>
+</body>
+</html>
