@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Time Calculator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        .container {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            width: 300px;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .input-group {
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+        }
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+        }
+        input {
+            flex-grow: 1;
+            padding: 0.5rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            margin-right: 0.5rem;
+        }
+        button {
+            padding: 0.5rem;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .reset-btn {
+            background-color: #f44336;
+        }
+        .reset-btn:hover {
+            background-color: #d32f2f;
+        }
+        #result {
+            margin-top: 1rem;
+            padding: 1rem;
+            background-color: #e9e9e9;
+            border-radius: 4px;
+        }
+        .button-group {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Time Calculator</h1>
+        <div class="input-group">
+            <input type="text" id="startTime" placeholder="HHMMSS">
+            <button class="reset-btn" onclick="resetInput('startTime')">Reset</button>
+        </div>
+        <div class="input-group">
+            <input type="text" id="endTime" placeholder="HHMMSS">
+            <button class="reset-btn" onclick="resetInput('endTime')">Reset</button>
+        </div>
+        <button id="calculateBtn">Calculate Time Difference</button>
+        <div id="result"></div>
+        <div class="button-group">
+            <button class="reset-btn" onclick="resetResult()">Reset Result</button>
+            <button class="reset-btn" onclick="resetAll()">Reset All</button>
+        </div>
+        <br>
+        <br>
+        <a href="index.html">Age Calculator</a>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const startTimeInput = document.getElementById('startTime');
+            const endTimeInput = document.getElementById('endTime');
+            const calculateBtn = document.getElementById('calculateBtn');
+
+            startTimeInput.addEventListener('input', formatTimeInput);
+            endTimeInput.addEventListener('input', formatTimeInput);
+            calculateBtn.addEventListener('click', calculateTimeDifference);
+        });
+
+        function formatTimeInput(event) {
+            let input = event.target;
+            let value = input.value.replace(/\D/g, '').slice(0, 6);
+            let formattedValue = '';
+
+            if (value.length > 0) {
+                formattedValue = value.match(/^(\d{0,2})(\d{0,2})(\d{0,2})$/).slice(1).join(':');
+            }
+
+            input.value = formattedValue;
+        }
+
+        function calculateTimeDifference() {
+            const startTimeStr = document.getElementById('startTime').value;
+            const endTimeStr = document.getElementById('endTime').value;
+
+            const timeRegex = /^(\d{2}):(\d{2}):(\d{2})$/;
+            if (!timeRegex.test(startTimeStr) || !timeRegex.test(endTimeStr)) {
+                alert('Please enter times in the format HH:MM:SS');
+                return;
+            }
+
+            const [, startHours, startMinutes, startSeconds] = startTimeStr.match(timeRegex);
+            const [, endHours, endMinutes, endSeconds] = endTimeStr.match(timeRegex);
+
+            const startDate = new Date(2000, 0, 1, startHours, startMinutes, startSeconds);
+            const endDate = new Date(2000, 0, 1, endHours, endMinutes, endSeconds);
+
+            let diffTime = endDate - startDate;
+            if (diffTime < 0) {
+                diffTime += 24 * 60 * 60 * 1000;
+            }
+
+            const hours = Math.floor(diffTime / (1000 * 60 * 60));
+            const minutes = Math.floor((diffTime % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((diffTime % (1000 * 60)) / 1000);
+
+            const formattedResult = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = `<p><strong>Time Difference:</strong> ${formattedResult}</p>`;
+        }
+
+        function resetInput(inputId) {
+            document.getElementById(inputId).value = '';
+        }
+
+        function resetResult() {
+            document.getElementById('result').innerHTML = '';
+        }
+
+        function resetAll() {
+            resetInput('startTime');
+            resetInput('endTime');
+            resetResult();
+        }
+    </script>
+</body>
+</html>
