@@ -11,6 +11,15 @@
             margin: 0 auto;
             padding: 20px;
         }
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .box {
+            border: 2px solid #333;
+            padding: 10px;
+        }
         table {
             width: 100%;
             border-collapse: collapse;
@@ -37,149 +46,155 @@
 <body>
     <h1>GR Requirement Ready Reckoner</h1>
 
-    <table id="rice">
-        <tr><th colspan="5">RICE</th></tr>
-        <tr>
-            <th>Adult/Minor</th>
-            <th>Population</th>
-            <th>Days</th>
-            <th>Scale (per head/day) (in Qtl)</th>
-            <th>Quantity (in Qtl)</th>
-        </tr>
-        <tr class="rice">
-            <td>Adult</td>
-            <td><input type="number" class="population" min="0" data-scale="0.006"></td>
-            <td><input type="number" class="days" min="0"></td>
-            <td>0.006</td>
-            <td class="quantity">0.0000</td>
-        </tr>
-        <tr class="rice">
-            <td>Minor</td>
-            <td><input type="number" class="population" min="0" data-scale="0.004"></td>
-            <td><input type="number" class="days" min="0"></td>
-            <td>0.004</td>
-            <td class="quantity">0.0000</td>
-        </tr>
-        <tr class="total-row">
-            <td colspan="4">TOTAL</td>
-            <td class="total-quantity">0.0000</td>
-        </tr>
-    </table>
+    <div class="container">
+        <div class="box">
+            <table id="rice">
+                <tr><th colspan="5">RICE</th></tr>
+                <tr>
+                    <th>Adult/Minor</th>
+                    <th>Population</th>
+                    <th>Days</th>
+                    <th>Scale (per head/day) (in Qtl)</th>
+                    <th>Quantity (in Qtl)</th>
+                </tr>
+                <tr class="rice">
+                    <td>Adult</td>
+                    <td><input type="number" class="population" min="0" data-scale="0.006"></td>
+                    <td><input type="number" class="days" min="0"></td>
+                    <td>0.006</td>
+                    <td class="quantity">0.0000</td>
+                </tr>
+                <tr class="rice">
+                    <td>Minor</td>
+                    <td><input type="number" class="population" min="0" data-scale="0.004"></td>
+                    <td><input type="number" class="days" min="0"></td>
+                    <td>0.004</td>
+                    <td class="quantity">0.0000</td>
+                </tr>
+                <tr class="total-row">
+                    <td colspan="4">TOTAL</td>
+                    <td class="total-quantity">0.0000</td>
+                </tr>
+            </table>
 
-    <table id="masur-dal">
-        <tr><th colspan="5">MASUR DAL</th></tr>
-        <tr>
-            <th>Adult/Minor</th>
-            <th>Population</th>
-            <th>Days</th>
-            <th>Scale (per head/day) (in Qtl)</th>
-            <th>Quantity (in Qtl)</th>
-        </tr>
-        <tr class="masur-dal">
-            <td>Adult</td>
-            <td><input type="number" class="population" min="0" data-scale="0.001"></td>
-            <td><input type="number" class="days" min="0"></td>
-            <td>0.001</td>
-            <td class="quantity">0.0000</td>
-        </tr>
-        <tr class="masur-dal">
-            <td>Minor</td>
-            <td><input type="number" class="population" min="0" data-scale="0.001"></td>
-            <td><input type="number" class="days" min="0"></td>
-            <td>0.001</td>
-            <td class="quantity">0.0000</td>
-        </tr>
-        <tr class="total-row">
-            <td colspan="4">TOTAL</td>
-            <td class="total-quantity">0.0000</td>
-        </tr>
-    </table>
+            <table id="masur-dal">
+                <tr><th colspan="5">MASUR DAL</th></tr>
+                <tr>
+                    <th>Adult/Minor</th>
+                    <th>Population</th>
+                    <th>Days</th>
+                    <th>Scale (per head/day) (in Qtl)</th>
+                    <th>Quantity (in Qtl)</th>
+                </tr>
+                <tr class="masur-dal">
+                    <td>Adult</td>
+                    <td><input type="number" class="population" min="0" data-scale="0.001"></td>
+                    <td><input type="number" class="days" min="0"></td>
+                    <td>0.001</td>
+                    <td class="quantity">0.0000</td>
+                </tr>
+                <tr class="masur-dal">
+                    <td>Minor</td>
+                    <td><input type="number" class="population" min="0" data-scale="0.001"></td>
+                    <td><input type="number" class="days" min="0"></td>
+                    <td>0.001</td>
+                    <td class="quantity">0.0000</td>
+                </tr>
+                <tr class="total-row">
+                    <td colspan="4">TOTAL</td>
+                    <td class="total-quantity">0.0000</td>
+                </tr>
+            </table>
 
-    <table id="salt">
-        <tr><th colspan="5">SALT</th></tr>
-        <tr>
-            <th>Adult/Minor</th>
-            <th>Population</th>
-            <th>Days</th>
-            <th>Scale (per head/day) (in Qtl)</th>
-            <th>Quantity (in Qtl)</th>
-        </tr>
-        <tr class="salt">
-            <td>Adult</td>
-            <td><input type="number" class="population" min="0" data-scale="0.0003"></td>
-            <td><input type="number" class="days" min="0"></td>
-            <td>0.0003</td>
-            <td class="quantity">0.0000</td>
-        </tr>
-        <tr class="salt">
-            <td>Minor</td>
-            <td><input type="number" class="population" min="0" data-scale="0.0003"></td>
-            <td><input type="number" class="days" min="0"></td>
-            <td>0.0003</td>
-            <td class="quantity">0.0000</td>
-        </tr>
-        <tr class="total-row">
-            <td colspan="4">TOTAL</td>
-            <td class="total-quantity">0.0000</td>
-        </tr>
-    </table>
+            <table id="salt">
+                <tr><th colspan="5">SALT</th></tr>
+                <tr>
+                    <th>Adult/Minor</th>
+                    <th>Population</th>
+                    <th>Days</th>
+                    <th>Scale (per head/day) (in Qtl)</th>
+                    <th>Quantity (in Qtl)</th>
+                </tr>
+                <tr class="salt">
+                    <td>Adult</td>
+                    <td><input type="number" class="population" min="0" data-scale="0.0003"></td>
+                    <td><input type="number" class="days" min="0"></td>
+                    <td>0.0003</td>
+                    <td class="quantity">0.0000</td>
+                </tr>
+                <tr class="salt">
+                    <td>Minor</td>
+                    <td><input type="number" class="population" min="0" data-scale="0.0003"></td>
+                    <td><input type="number" class="days" min="0"></td>
+                    <td>0.0003</td>
+                    <td class="quantity">0.0000</td>
+                </tr>
+                <tr class="total-row">
+                    <td colspan="4">TOTAL</td>
+                    <td class="total-quantity">0.0000</td>
+                </tr>
+            </table>
+        </div>
 
-    <table id="wheat-bran">
-        <tr><th colspan="5">WHEAT BRAN</th></tr>
-        <tr>
-            <th>Big Animal</th>
-            <th>Population</th>
-            <th>Days</th>
-            <th>Scale (per head/day) (in Qtl)</th>
-            <th>Quantity (in Qtl)</th>
-        </tr>
-        <tr class="wheat-bran">
-            <td>Buffalo</td>
-            <td><input type="number" class="population" min="0" data-scale="0.05"></td>
-            <td><input type="number" class="days" min="0"></td>
-            <td>0.05</td>
-            <td class="quantity">0.0000</td>
-        </tr>
-        <tr class="wheat-bran">
-            <td>Cow</td>
-            <td><input type="number" class="population" min="0" data-scale="0.04"></td>
-            <td><input type="number" class="days" min="0"></td>
-            <td>0.04</td>
-            <td class="quantity">0.0000</td>
-        </tr>
-        <tr class="total-row">
-            <td colspan="4">TOTAL</td>
-            <td class="total-quantity">0.0000</td>
-        </tr>
-    </table>
+        <div class="box">
+            <table id="wheat-bran">
+                <tr><th colspan="5">WHEAT BRAN</th></tr>
+                <tr>
+                    <th>Big Animal</th>
+                    <th>Population</th>
+                    <th>Days</th>
+                    <th>Scale (per head/day) (in Qtl)</th>
+                    <th>Quantity (in Qtl)</th>
+                </tr>
+                <tr class="wheat-bran">
+                    <td>Buffalo</td>
+                    <td><input type="number" class="population" min="0" data-scale="0.05"></td>
+                    <td><input type="number" class="days" min="0"></td>
+                    <td>0.05</td>
+                    <td class="quantity">0.0000</td>
+                </tr>
+                <tr class="wheat-bran">
+                    <td>Cow</td>
+                    <td><input type="number" class="population" min="0" data-scale="0.04"></td>
+                    <td><input type="number" class="days" min="0"></td>
+                    <td>0.04</td>
+                    <td class="quantity">0.0000</td>
+                </tr>
+                <tr class="total-row">
+                    <td colspan="4">TOTAL</td>
+                    <td class="total-quantity">0.0000</td>
+                </tr>
+            </table>
 
-    <table id="wheat-bran-small">
-        <tr>
-            <th>Small Animal</th>
-            <th>Population</th>
-            <th>Days</th>
-            <th>Scale (per head/day) (in Qtl)</th>
-            <th>Quantity (in Qtl)</th>
-        </tr>
-        <tr class="wheat-bran">
-            <td>Sheep</td>
-            <td><input type="number" class="population" min="0" data-scale="0.01"></td>
-            <td><input type="number" class="days" min="0"></td>
-            <td>0.01</td>
-            <td class="quantity">0.0000</td>
-        </tr>
-        <tr class="wheat-bran">
-            <td>Goat</td>
-            <td><input type="number" class="population" min="0" data-scale="0.01"></td>
-            <td><input type="number" class="days" min="0"></td>
-            <td>0.01</td>
-            <td class="quantity">0.0000</td>
-        </tr>
-        <tr class="total-row">
-            <td colspan="4">TOTAL</td>
-            <td class="total-quantity">0.0000</td>
-        </tr>
-    </table>
+            <table id="wheat-bran-small">
+                <tr>
+                    <th>Small Animal</th>
+                    <th>Population</th>
+                    <th>Days</th>
+                    <th>Scale (per head/day) (in Qtl)</th>
+                    <th>Quantity (in Qtl)</th>
+                </tr>
+                <tr class="wheat-bran">
+                    <td>Sheep</td>
+                    <td><input type="number" class="population" min="0" data-scale="0.01"></td>
+                    <td><input type="number" class="days" min="0"></td>
+                    <td>0.01</td>
+                    <td class="quantity">0.0000</td>
+                </tr>
+                <tr class="wheat-bran">
+                    <td>Goat</td>
+                    <td><input type="number" class="population" min="0" data-scale="0.01"></td>
+                    <td><input type="number" class="days" min="0"></td>
+                    <td>0.01</td>
+                    <td class="quantity">0.0000</td>
+                </tr>
+                <tr class="total-row">
+                    <td colspan="4">TOTAL</td>
+                    <td class="total-quantity">0.0000</td>
+                </tr>
+            </table>
+        </div>
+    </div>
 
     <script>
         function calculateQuantity(table) {
