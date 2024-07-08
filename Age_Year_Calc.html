@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Age Calculator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        .container {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        input, button {
+            font-size: 1rem;
+            padding: 0.5rem;
+            margin: 0.5rem 0;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #result {
+            margin-top: 1rem;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Age Calculator</h1>
+        <input type="number" id="birthYear" placeholder="Enter your birth year">
+        <button onclick="calculateAge()">Calculate Age</button>
+        <div id="result"></div>
+    </div>
+
+    <script>
+        function calculateAge() {
+            const currentYear = new Date().getFullYear();
+            const birthYear = parseInt(document.getElementById('birthYear').value);
+            
+            if (isNaN(birthYear) || birthYear < 1900 || birthYear > currentYear) {
+                document.getElementById('result').textContent = "Please enter a valid birth year.";
+                return;
+            }
+
+            const age = currentYear - birthYear;
+            document.getElementById('result').textContent = `Your age in ${currentYear} is ${age} years old.`;
+        }
+    </script>
+</body>
+</html>
