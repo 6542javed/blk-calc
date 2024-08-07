@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Offline PDF Compressor</title>
+    <style>
+        body {
+            background-color: #f0f0f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        .title {
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+        .file-input {
+            margin-bottom: 20px;
+        }
+        .compress-btn {
+            display: none;
+            background-color: #007BFF;
+            color: #fff;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .status {
+            margin-top: 20px;
+            font-size: 16px;
+            color: #333;
+        }
+    </style>
+    <!-- PDF.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.9.359/pdf.min.js"></script>
+    <!-- jsPDF CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="title">Offline PDF Compressor</div>
+        <input type="file" id="fileInput" class="file-input" accept="application/pdf">
+        <button id="compressBtn" class="compress-btn">Compress PDF</button>
+        <div id="status" class="status"></div>
+    </div>
+
+    <script>
+        // Set the PDF.js worker source
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.9.359/pdf.worker.min.js';
+
+        const fileInput = document.getElementById('fileInput');
+        const compressBtn = document.getElementById('compressBtn');
+        const status = document.getElementById('status');
+
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files.length > 0) {
+                compressBtn.style.display = 'inline-block';
+                status.textContent = '';
+            }
+        });
+
+        compressBtn.addEventListener('click', async () => {
+            const file = fileInput.files[0];
+            if (!file) {
+                status.textContent = 'Please select a PDF file.';
+                return;
+            }
+
+            try {
+                status.textContent = 'Loading PDF...';
+                const pdf = await pdfjsLib.getDocument(URL.createObjectURL(file)).promise;
+                const numPages = pdf.numPages;
+                const compressedPdf = new jsPDF();
+
+                for (let i = 1; i <= numPages; i++) {
+                    status.textContent = `Compressing page ${i} of ${numPages}...`;
+                    const page = await pdf.getPage(i);
+                    const viewport = page.getViewport({ scale: 1.0 });
+                    const canvas = document.createElement('canvas');
+                    const context = canvas.getContext('2d');
+                    canvas.width = viewport.width;
+                    canvas.height = viewport.height;
+
+                    const renderContext = {
+                        canvasContext: context,
+                        viewport: viewport
+                    };
+                    await page.render(renderContext).promise;
+
+                    const imgData = canvas.toDataURL('image/jpeg', 0.5); // Reduce JPEG quality for compression
+                    compressedPdf.addImage(imgData, 'JPEG', 0, 0, canvas.width, canvas.height);
+                    if (i < numPages) {
+                        compressedPdf.addPage();
+                    }
+                }
+
+                status.textContent = 'Compression complete. Downloading...';
+                compressedPdf.save('compressed.pdf');
+                status.textContent = 'Compression complete. Download finished.';
+            } catch (error) {
+                status.textContent = 'An error occurred during compression.';
+                console.error(error);
+            }
+        });
+    </script>
+</body>
+</html>
