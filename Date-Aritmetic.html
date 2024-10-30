@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Date Calculator</title>
+    <style>
+        body, html {
+            height: 100%;
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background-color: #f0f2f5;
+        }
+        .container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+        }
+        .calculator {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            max-width: 400px;
+            width: 100%;
+        }
+        .calculator h2 {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #333;
+        }
+        .field {
+            margin-bottom: 15px;
+        }
+        .field label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+        }
+        .field input {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .buttons {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        .buttons button {
+            width: 48%;
+            padding: 10px;
+            border: none;
+            border-radius: 4px;
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .buttons .add {
+            background-color: #28a745;
+        }
+        .buttons .subtract {
+            background-color: #dc3545;
+        }
+        .result {
+            text-align: center;
+            font-size: 18px;
+            color: #333;
+            min-height: 24px;
+        }
+        @media (max-width: 500px) {
+            .calculator {
+                padding: 20px;
+            }
+            .buttons button {
+                font-size: 14px;
+                padding: 8px;
+            }
+            .result {
+                font-size: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="calculator">
+        <h2>Date Calculator</h2>
+        <div class="field">
+            <label for="initialDate">Select Date:</label>
+            <input type="date" id="initialDate" required>
+        </div>
+        <div class="field">
+            <label for="days">Days:</label>
+            <input type="number" id="days" placeholder="Enter days (positive or negative)" value="0">
+        </div>
+        <div class="field">
+            <label for="months">Months:</label>
+            <input type="number" id="months" placeholder="Enter months (positive or negative)" value="0">
+        </div>
+        <div class="field">
+            <label for="years">Years:</label>
+            <input type="number" id="years" placeholder="Enter years (positive or negative)" value="0">
+        </div>
+        <div class="buttons">
+            <button class="add" onclick="calculateDate(true)">Add</button>
+            <button class="subtract" onclick="calculateDate(false)">Subtract</button>
+        </div>
+        <div class="result" id="result"></div>
+    </div>
+</div>
+
+<script>
+    function calculateDate(isAdd) {
+        const initialDateInput = document.getElementById('initialDate').value;
+        const days = parseInt(document.getElementById('days').value) || 0;
+        const months = parseInt(document.getElementById('months').value) || 0;
+        const years = parseInt(document.getElementById('years').value) || 0;
+
+        if (!initialDateInput) {
+            alert('Please select a date.');
+            return;
+        }
+
+        let date = new Date(initialDateInput);
+
+        if (!isAdd) {
+            // To subtract, invert the values
+            date.setDate(date.getDate() - days);
+            date.setMonth(date.getMonth() - months);
+            date.setFullYear(date.getFullYear() - years);
+        } else {
+            date.setDate(date.getDate() + days);
+            date.setMonth(date.getMonth() + months);
+            date.setFullYear(date.getFullYear() + years);
+        }
+
+        // Handle month overflow/underflow
+        // This is already handled by setMonth and setFullYear in JavaScript
+
+        // Format the date to YYYY-MM-DD
+        const year = date.getFullYear();
+        let month = (date.getMonth() + 1).toString();
+        let day = date.getDate().toString();
+
+        if (month.length < 2) month = '0' + month;
+        if (day.length < 2) day = '0' + day;
+
+        const formattedDate = `${year}-${month}-${day}`;
+
+        document.getElementById('result').innerText = `Resulting Date: ${formattedDate}`;
+    }
+</script>
+
+</body>
+</html>
