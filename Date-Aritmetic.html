@@ -48,10 +48,10 @@
             margin-bottom: 15px;
             display: flex;
             align-items: center;
+            gap: 8px;
         }
-        .checkbox-field input {
+        .checkbox-field input[type="checkbox"] {
             width: auto;
-            margin-right: 8px;
         }
         .checkbox-field label {
             display: inline;
@@ -119,8 +119,8 @@
             <input type="number" id="years" placeholder="Enter years (positive or negative)" value="0">
         </div>
         <div class="checkbox-field">
-            <input type="checkbox" id="inclusive" checked>
-            <label for="inclusive">Include start and end dates in calculation</label>
+            <input type="checkbox" id="excludeInitial">
+            <label for="excludeInitial">Exclude initial date from calculation</label>
         </div>
         <div class="buttons">
             <button class="add" onclick="calculateDate(true)">Add</button>
@@ -136,7 +136,7 @@
         const days = parseInt(document.getElementById('days').value) || 0;
         const months = parseInt(document.getElementById('months').value) || 0;
         const years = parseInt(document.getElementById('years').value) || 0;
-        const inclusive = document.getElementById('inclusive').checked;
+        const excludeInitial = document.getElementById('excludeInitial').checked;
 
         if (!initialDateInput) {
             alert('Please select a date.');
@@ -144,15 +144,19 @@
         }
 
         let date = new Date(initialDateInput);
-        let adjustment = inclusive ? (isAdd ? -1 : 1) : 0;
+        
+        // If excluding initial date, start from next/previous day
+        if (excludeInitial) {
+            date.setDate(date.getDate() + (isAdd ? 1 : -1));
+        }
 
         if (!isAdd) {
             // To subtract, invert the values
-            date.setDate(date.getDate() - days + adjustment);
+            date.setDate(date.getDate() - days);
             date.setMonth(date.getMonth() - months);
             date.setFullYear(date.getFullYear() - years);
         } else {
-            date.setDate(date.getDate() + days + adjustment);
+            date.setDate(date.getDate() + days);
             date.setMonth(date.getMonth() + months);
             date.setFullYear(date.getFullYear() + years);
         }
