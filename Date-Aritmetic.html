@@ -44,6 +44,19 @@
             border: 1px solid #ccc;
             border-radius: 4px;
         }
+        .checkbox-field {
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+        }
+        .checkbox-field input {
+            width: auto;
+            margin-right: 8px;
+        }
+        .checkbox-field label {
+            display: inline;
+            color: #555;
+        }
         .buttons {
             display: flex;
             justify-content: space-between;
@@ -105,6 +118,10 @@
             <label for="years">Years:</label>
             <input type="number" id="years" placeholder="Enter years (positive or negative)" value="0">
         </div>
+        <div class="checkbox-field">
+            <input type="checkbox" id="inclusive" checked>
+            <label for="inclusive">Include start and end dates in calculation</label>
+        </div>
         <div class="buttons">
             <button class="add" onclick="calculateDate(true)">Add</button>
             <button class="subtract" onclick="calculateDate(false)">Subtract</button>
@@ -119,6 +136,7 @@
         const days = parseInt(document.getElementById('days').value) || 0;
         const months = parseInt(document.getElementById('months').value) || 0;
         const years = parseInt(document.getElementById('years').value) || 0;
+        const inclusive = document.getElementById('inclusive').checked;
 
         if (!initialDateInput) {
             alert('Please select a date.');
@@ -126,20 +144,18 @@
         }
 
         let date = new Date(initialDateInput);
+        let adjustment = inclusive ? (isAdd ? -1 : 1) : 0;
 
         if (!isAdd) {
             // To subtract, invert the values
-            date.setDate(date.getDate() - days);
+            date.setDate(date.getDate() - days + adjustment);
             date.setMonth(date.getMonth() - months);
             date.setFullYear(date.getFullYear() - years);
         } else {
-            date.setDate(date.getDate() + days);
+            date.setDate(date.getDate() + days + adjustment);
             date.setMonth(date.getMonth() + months);
             date.setFullYear(date.getFullYear() + years);
         }
-
-        // Handle month overflow/underflow
-        // This is already handled by setMonth and setFullYear in JavaScript
 
         // Format the date to YYYY-MM-DD
         const year = date.getFullYear();
