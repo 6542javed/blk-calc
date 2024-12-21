@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Date Calculator</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/css/bootstrap.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.1/moment.min.js"></script>
+</head>
+<body>
+    <div class="container mt-5">
+        <h2>Date Calculator</h2>
+        <form id="date-form">
+            <div class="form-group">
+                <label for="initial-date">Initial Date:</label>
+                <input type="date" class="form-control" id="initial-date" required>
+            </div>
+            <div class="form-group">
+                <label for="value">Value:</label>
+                <input type="number" class="form-control" id="value" required>
+            </div>
+            <div class="form-group">
+                <label for="unit">Unit:</label>
+                <select class="form-control" id="unit" required>
+                    <option value="days">Days</option>
+                    <option value="weeks">Weeks</option>
+                    <option value="months">Months</option>
+                    <option value="years">Years</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Operation:</label>
+                <div class="radio">
+                    <label>
+                        <input type="radio" name="operation" value="add" checked> Add
+                    </label>
+                </div>
+                <div class="radio">
+                    <label>
+                        <input type="radio" name="operation" value="subtract"> Subtract
+                    </label>
+                </div>
+            </div>
+            <div class="form-group">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" value="" id="exclude-initial-date">
+                    <label class="form-check-label" for="exclude-initial-date">
+                        Exclude initial date from calculation
+                    </label>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary">Calculate</button>
+        </form>
+        <p id="result"></p>
+        <p id="error" style="color: red;"></p>
+    </div>
+    <script>
+        const form = document.getElementById('date-form');
+        const resultElement = document.getElementById('result');
+        const errorElement = document.getElementById('error');
+        const excludeInitialDateCheckbox = document.getElementById('exclude-initial-date');
+
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const initialDate = document.getElementById('initial-date').value;
+            const value = parseInt(document.getElementById('value').value);
+            const unit = document.getElementById('unit').value;
+            const operation = document.querySelector('input[name="operation"]:checked').value;
+            const excludeInitialDate = excludeInitialDateCheckbox.checked;
+
+            if (!initialDate || !value) {
+                errorElement.textContent = 'Please fill in all fields.';
+                return;
+            }
+
+            const initialMoment = moment(initialDate);
+            let resultMoment;
+            if (operation === 'add') {
+                if (excludeInitialDate) {
+                    resultMoment = initialMoment.clone().add(value + 1, unit);
+                } else {
+                    resultMoment = initialMoment.clone().add(value, unit);
+                }
+            } else {
+                if (excludeInitialDate) {
+                    resultMoment = initialMoment.clone().subtract(value + 1, unit);
+                } else {
+                    resultMoment = initialMoment.clone().subtract(value, unit);
+                }
+            }
+
+            resultElement.textContent = `Resultant date: ${resultMoment.format('YYYY-MM-DD')}`;
+            errorElement.textContent = '';
+        });
+    </script>
+</body>
+</html>
