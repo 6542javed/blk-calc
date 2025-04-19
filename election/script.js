@@ -1,14 +1,17 @@
 document.addEventListener('DOMContentLoaded', () => {
     // --- Global State ---
-    let rawData = []; // Data directly from Excel sheet
+    let rawData = []; // Data directly from source (Excel/CSV)
     let processedData = []; // Cleaned and processed data used by UIs
     let psNames = []; // Unique, sorted PS names
     let psNameToIndexMap = {}; // Map PS name to index in processedData
     let currentView = 'ballot_count'; // 'ballot_count' or 'contestant_names'
     let totalAllBallots = 0;
+    let isLoading = false; // Flag to prevent concurrent loading
 
     // --- DOM Element References ---
     const fileInput = document.getElementById('excelFile');
+    const googleSheetUrlInput = document.getElementById('googleSheetUrl'); // New
+    const loadFromUrlButton = document.getElementById('loadFromUrlButton'); // New
     const statusLabel = document.getElementById('statusLabel');
     const switchViewButton = document.getElementById('switchViewButton');
 
@@ -29,7 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const apCandidateList = document.getElementById('apCandidateList');
     const wardCandidateList = document.getElementById('wardCandidateList');
 
-    // --- Utility Functions ---
+    // --- Utility Functions (getCandidateNamesJS, safeParseInt - unchanged) ---
 
     /**
      * Extracts valid candidate names from a row object based on a prefix.
@@ -42,12 +45,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!row) return candidates;
 
         for (const key in row) {
-            // Check if key exists, is a string, and starts with the prefix
             if (Object.hasOwnProperty.call(row, key) && typeof key === 'string' && key.startsWith(prefix)) {
                 let value = row[key];
-                // Check if value is not null/undefined
                 if (value !== null && value !== undefined) {
-                    // Convert to string, trim, check if not empty and not 'nil' (case-insensitive)
                     const strValue = String(value).trim();
                     if (strValue && strValue.toLowerCase() !== 'nil') {
                         candidates.push(strValue);
@@ -60,7 +60,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /**
      * Safely converts a value to an integer, defaulting to 0.
-     * Handles strings, numbers, and potential float strings like "150.0".
      * @param {*} value - The value to convert.
      * @returns {number} - The integer value or 0.
      */
@@ -68,20 +67,21 @@ document.addEventListener('DOMContentLoaded', () => {
         if (value === null || value === undefined || String(value).trim() === '') {
             return 0;
         }
-        const num = Number(String(value).trim()); // Try converting to number directly
-        return Number.isFinite(num) ? Math.floor(num) : 0; // Floor it if finite, else 0
+        const num = Number(String(value).trim());
+        return Number.isFinite(num) ? Math.floor(num) : 0;
     }
 
     // --- Event Listeners ---
     fileInput.addEventListener('change', handleFileLoad);
+    loadFromUrlButton.addEventListener('click', handleUrlLoad); // New listener
     switchViewButton.addEventListener('click', switchView);
     exportButton.addEventListener('click', exportBallotTable);
     ballotSearchButton.addEventListener('click', filterBallotTable);
-    ballotSearchInput.addEventListener('input', filterBallotTable); // Filter as user types
-    psSearchInput.addEventListener('input', filterPsList); // Filter as user types
+    ballotSearchInput.addEventListener('input', filterBallotTable);
+    psSearchInput.addEventListener('input', filterPsList);
     psList.addEventListener('click', handlePsSelect);
 
-    // Tooltip listeners for ballot table (using event delegation)
+    // Tooltip listeners for ballot table
     ballotTableBody.addEventListener('mouseover', handleTableMouseOver);
     ballotTableBody.addEventListener('mouseout', handleTableMouseOut);
     ballotTableBody.addEventListener('mousemove', handleTableMouseMove);
@@ -90,60 +90,86 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Core Logic Functions ---
 
     /**
-     * Handles the loading and processing of the selected Excel file.
+     * Generic function to start the loading process.
+     */
+    function startLoading(message = 'Loading data...') {
+        if (isLoading) {
+            console.warn("Already loading data.");
+            return false; // Indicate loading didn't start
+        }
+        isLoading = true;
+        statusLabel.textContent = message;
+        disableControls(); // Disable controls during load
+        // Clear previous results visually
+        resetUIOnly();
+        return true; // Indicate loading started
+    }
+
+    /**
+     * Generic function to end the loading process (success or failure).
+     */
+    function endLoading() {
+        isLoading = false;
+        // Re-enable controls based on whether data is present
+        if (processedData && processedData.length > 0) {
+            enableControls();
+        } else {
+            disableControls(); // Keep disabled if load failed or no data
+        }
+         // Reset file input to allow reloading the same file if needed
+         fileInput.value = '';
+    }
+
+     /**
+     * Clears UI elements without resetting the underlying data state immediately.
+     */
+    function resetUIOnly() {
+        ballotTableBody.innerHTML = '';
+        psList.innerHTML = '';
+        clearCandidateColumnsUI();
+        ballotSummaryLabel.textContent = 'Processing...';
+        tooltipElement.style.display = 'none';
+        // Don't clear statusLabel here, it's managed by startLoading/endLoading
+    }
+
+
+    /**
+     * Handles the loading and processing of the selected local Excel file.
      */
     function handleFileLoad(event) {
         const file = event.target.files[0];
-        if (!file) {
-            statusLabel.textContent = 'No file selected.';
-            return;
-        }
+        if (!file) return; // No file selected
 
-        statusLabel.textContent = 'Loading file...';
+        if (!startLoading(`Loading file: ${file.name}...`)) return;
+
         const reader = new FileReader();
 
         reader.onload = (e) => {
             try {
                 const data = new Uint8Array(e.target.result);
                 const workbook = XLSX.read(data, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                if (!sheetName) throw new Error("Excel file has no sheets.");
 
-                const sheetName = workbook.SheetNames[0]; // Assume data is on the first sheet
-                if (!sheetName) {
-                    throw new Error("Excel file seems empty or has no sheets.");
-                }
-                // Convert sheet to JSON array of objects
-                // Use defval: '' to ensure empty cells become empty strings, not undefined
                 rawData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
+                if (!rawData.length) throw new Error(`Sheet '${sheetName}' is empty.`);
 
-                if (!rawData.length) {
-                     throw new Error("Sheet 'Sheet1' is empty or could not be read.");
-                }
-                 // Check for 'PS Name' column (case-insensitive check is safer)
-                 const headers = Object.keys(rawData[0] || {});
-                 const psNameHeader = headers.find(h => h.trim().toLowerCase() === 'ps name');
-                 if (!psNameHeader) {
-                     throw new Error("Required column 'PS Name' not found in the sheet.");
-                 }
+                const headers = Object.keys(rawData[0] || {});
+                const psNameHeader = headers.find(h => h.trim().toLowerCase() === 'ps name');
+                if (!psNameHeader) throw new Error("Required column 'PS Name' not found.");
 
-
-                // --- Process Raw Data ---
-                processRawData(rawData, psNameHeader); // Pass the actual header found
-
-                // --- Update UIs ---
-                updateBallotTableUI();
-                populatePsListUI();
-
+                // Process Data & Update UI
+                processRawData(rawData, psNameHeader);
+                updateAllUIs(); // Central function to update both views
                 statusLabel.textContent = `Loaded ${processedData.length} unique PS from: ${file.name}`;
-                enableControls(); // Enable buttons and inputs now that data is loaded
 
             } catch (error) {
                 console.error("Error processing Excel file:", error);
                 statusLabel.textContent = `Error: ${error.message}`;
-                alert(`Error loading or processing file:\n${error.message}\n\nPlease ensure the file is a valid Excel file, contains a 'Sheet1', and has a 'PS Name' column.`);
-                resetApplicationState(); // Clear data and disable controls on error
+                alert(`Error loading or processing file:\n${error.message}`);
+                resetApplicationState(); // Clear data on error
             } finally {
-                // Reset file input to allow reloading the same file if needed
-                 fileInput.value = '';
+                endLoading(); // End loading process regardless of success/failure
             }
         };
 
@@ -152,53 +178,116 @@ document.addEventListener('DOMContentLoaded', () => {
             statusLabel.textContent = 'Error reading file.';
             alert("An error occurred while trying to read the file.");
             resetApplicationState();
+            endLoading();
         };
 
-        reader.readAsArrayBuffer(file); // Read file as ArrayBuffer
+        reader.readAsArrayBuffer(file);
     }
 
-     /**
+    /**
+     * Handles loading and processing data from a Google Sheet CSV URL.
+     */
+    async function handleUrlLoad() {
+        const url = googleSheetUrlInput.value.trim();
+        if (!url) {
+            alert("Please paste a valid Google Sheet 'Publish to web' CSV URL first.");
+            return;
+        }
+        // Basic check for expected format (improve if needed)
+        if (!url.includes('/pub?output=csv')) {
+             alert("Invalid URL format. Please make sure you use the 'Publish to web' link ending in '/pub?output=csv'.");
+             return;
+        }
+
+        if (!startLoading(`Loading from URL...`)) return;
+
+        try {
+            // Use fetch to get the CSV data
+            // Add 'cors' mode if needed, though published CSVs are usually public
+            const response = await fetch(url);
+
+            if (!response.ok) {
+                // Handle HTTP errors (404 Not Found, 403 Forbidden, etc.)
+                throw new Error(`Failed to fetch data. Status: ${response.status} ${response.statusText}. Ensure the link is correct and published publicly.`);
+            }
+
+            // Get CSV data as text
+            const csvText = await response.text();
+            if (!csvText) {
+                 throw new Error("Fetched data is empty. Check the Google Sheet.");
+            }
+
+            // Use SheetJS to parse the CSV string
+            // Create a workbook from the string data
+            const workbook = XLSX.read(csvText, { type: 'string', raw: true }); // raw:true might help with type interpretation
+            const sheetName = workbook.SheetNames[0]; // CSV will likely have only one sheet
+            if (!sheetName) throw new Error("Could not parse CSV data.");
+
+            rawData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
+             if (!rawData.length) throw new Error("CSV data is empty after parsing.");
+
+
+            // --- Identify PS Name Header (Crucial for CSV) ---
+            // CSV headers might have subtle differences, find case-insensitively
+            const headers = Object.keys(rawData[0] || {});
+            const psNameHeader = headers.find(h => h.trim().toLowerCase() === 'ps name');
+            if (!psNameHeader) throw new Error("Required column 'PS Name' not found in the CSV data.");
+
+
+            // Process Data & Update UI
+            processRawData(rawData, psNameHeader);
+            updateAllUIs();
+            statusLabel.textContent = `Loaded ${processedData.length} unique PS from URL.`;
+
+        } catch (error) {
+            console.error("Error loading/processing Google Sheet URL:", error);
+            statusLabel.textContent = `Error: ${error.message}`;
+            alert(`Error loading from URL:\n${error.message}`);
+            resetApplicationState(); // Clear data on error
+        } finally {
+            endLoading(); // End loading process
+        }
+    }
+
+
+    /**
      * Cleans raw data, handles duplicates, calculates necessary values.
-     * @param {object[]} rawJsonData - Data array from SheetJS.
+     * @param {object[]} sourceData - Data array from SheetJS (JSON).
      * @param {string} psNameKey - The exact key found for 'PS Name'.
      */
-    function processRawData(rawJsonData, psNameKey) {
+    function processRawData(sourceData, psNameKey) {
+        // Reset processed data structures
         processedData = [];
         psNameToIndexMap = {};
         psNames = [];
-        const seenPsNames = new Set(); // Keep track of PS Names already added
+        const seenPsNames = new Set();
 
-        rawJsonData.forEach((rawRow, index) => {
+        sourceData.forEach((rawRow, index) => {
             const originalPsName = String(rawRow[psNameKey] || '').trim();
 
-            // Skip rows with empty PS Name after trimming
             if (!originalPsName) {
-                console.warn(`Skipping row ${index + 2} due to empty PS Name.`);
+                console.warn(`Skipping row ${index + 2} (source) due to empty PS Name.`);
                 return;
             }
-
-             // Handle potential duplicate PS names: only process the first occurrence
             if (seenPsNames.has(originalPsName)) {
-                console.warn(`Skipping duplicate PS Name: "${originalPsName}" at row ${index + 2}.`);
+                console.warn(`Skipping duplicate PS Name: "${originalPsName}" at row ${index + 2} (source).`);
                 return;
             }
             seenPsNames.add(originalPsName);
 
-
             const processedRow = {
-                originalIndex: index, // Keep track of original row for potential debugging
+                originalIndex: index,
                 psName: originalPsName,
-                voters: safeParseInt(rawRow['Total Number of Voter']), // Use the exact header or make configurable
-                candidates: {}, // Store extracted candidates here
-                ballotInfo: {} // Store ballot calculation results here
+                // Find voter column case-insensitively as well for robustness
+                voters: safeParseInt(findValueCaseInsensitive(rawRow, 'Total Number of Voter') || '0'),
+                candidates: {},
+                ballotInfo: {}
             };
 
-            // Extract candidates
             processedRow.candidates.zpc = getCandidateNamesJS(rawRow, 'ZPM');
             processedRow.candidates.ap = getCandidateNamesJS(rawRow, 'APM');
             processedRow.candidates.ward = getCandidateNamesJS(rawRow, 'GPM');
 
-            // Calculate ballot requirements and totals
             const zpcFlag = processedRow.candidates.zpc.length >= 2 ? 1 : 0;
             const apFlag = processedRow.candidates.ap.length >= 2 ? 1 : 0;
             const wardFlag = processedRow.candidates.ward.length >= 2 ? 1 : 0;
@@ -216,21 +305,56 @@ document.addEventListener('DOMContentLoaded', () => {
             processedData.push(processedRow);
         });
 
-         // Sort processed data by PS Name for consistent display
         processedData.sort((a, b) => a.psName.localeCompare(b.psName));
 
-        // Create map and names list *after* sorting and processing unique names
         processedData.forEach((row, newIndex) => {
              psNames.push(row.psName);
-             psNameToIndexMap[row.psName] = newIndex; // Map name to its index in the *processedData* array
+             psNameToIndexMap[row.psName] = newIndex;
         });
     }
+
+    /**
+    * Helper to find a value in an object using a case-insensitive key.
+    * Returns the value associated with the first matching key found.
+    * @param {object} obj The object to search in.
+    * @param {string} targetKey The key to search for (case-insensitive).
+    * @returns {*} The value found, or undefined if not found.
+    */
+    function findValueCaseInsensitive(obj, targetKey) {
+        if (!obj || typeof targetKey !== 'string') return undefined;
+        const lowerTargetKey = targetKey.toLowerCase();
+        for (const key in obj) {
+            if (Object.hasOwnProperty.call(obj, key) && String(key).toLowerCase() === lowerTargetKey) {
+                return obj[key];
+            }
+        }
+        return undefined; // Key not found
+    }
+
+
+    /**
+     * Central function to trigger updates for both UI views.
+     */
+     function updateAllUIs() {
+         updateBallotTableUI();
+         populatePsListUI();
+         // Clear candidate details initially after load
+         clearCandidateColumnsUI();
+         // Reset selection in PS list
+         const previouslySelected = psList.querySelector('.selected');
+         if (previouslySelected) {
+             previouslySelected.classList.remove('selected');
+         }
+     }
+
+
+    // --- UI Update Functions (updateBallotTableUI, filterBallotTable, exportBallotTable, Tooltip Handlers, populatePsListUI, filterPsList, handlePsSelect, updateCandidateColumnsUI, clearCandidateColumnsUI - largely unchanged, check export logic) ---
 
     /**
      * Updates the Ballot Count table in the UI.
      */
     function updateBallotTableUI() {
-        ballotTableBody.innerHTML = ''; // Clear existing rows
+        ballotTableBody.innerHTML = '';
         totalAllBallots = 0;
 
         if (!processedData.length) {
@@ -240,10 +364,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         processedData.forEach((row, index) => {
             totalAllBallots += row.ballotInfo.psTotal;
-
             const tr = document.createElement('tr');
-            // Store the index of the row in processedData for easy lookup (e.g., for tooltips)
-            tr.dataset.rowIndex = index;
+            tr.dataset.rowIndex = index; // Use index from processedData
 
             tr.innerHTML = `
                 <td>${index + 1}</td>
@@ -263,7 +385,6 @@ document.addEventListener('DOMContentLoaded', () => {
         ballotSummaryLabel.textContent = `Total Ballots Required (all PS): ${totalAllBallots.toLocaleString()}`;
     }
 
-
     /**
      * Filters the Ballot Count table based on the search input.
      */
@@ -272,20 +393,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const rows = ballotTableBody.getElementsByTagName('tr');
 
         for (const row of rows) {
-            const psNameCell = row.cells[1]; // PS Name is the second cell (index 1)
+            const psNameCell = row.cells[1];
             if (psNameCell) {
                 const psName = psNameCell.textContent.toLowerCase();
                 if (psName.includes(searchTerm)) {
-                    row.classList.remove('hidden'); // Show row
+                    row.classList.remove('hidden');
                 } else {
-                    row.classList.add('hidden'); // Hide row
+                    row.classList.add('hidden');
                 }
             }
         }
+        // Optional: Recalculate visible total if needed, but export handles visible rows
     }
 
     /**
-     * Exports the current data in the ballot table view to an Excel file.
+     * Exports the current data *visible* in the ballot table view to an Excel file.
      */
      function exportBallotTable() {
         if (!processedData.length) {
@@ -298,21 +420,19 @@ document.addEventListener('DOMContentLoaded', () => {
             "No.", "PS Name", "Total Voters", "ZPC Ballot", "Total ZPC Ballots",
             "AP Ballot", "Total AP Ballots", "Ward Ballot", "Total Ward Ballots", "Total Ballots"
         ];
-
-        // Iterate through VISIBLE rows if filtering is applied, or all rows otherwise
         const rows = ballotTableBody.getElementsByTagName('tr');
         let visibleRowCount = 0;
+        let visibleTotalBallots = 0; // Calculate total for visible rows
 
         for (const row of rows) {
-             // Check if the row is currently visible (not hidden by filter)
-             if (!row.classList.contains('hidden')) {
+             if (!row.classList.contains('hidden')) { // Only export visible rows
                 visibleRowCount++;
-                const rowIndex = parseInt(row.dataset.rowIndex, 10);
-                const rowData = processedData[rowIndex];
-
-                 if(rowData){ // Ensure data exists for the index
+                const rowIndex = parseInt(row.dataset.rowIndex, 10); // Get index from data attribute
+                 if (rowIndex >= 0 && rowIndex < processedData.length) {
+                    const rowData = processedData[rowIndex];
+                    visibleTotalBallots += rowData.ballotInfo.psTotal; // Sum totals for visible rows
                     dataToExport.push({
-                        [headers[0]]: visibleRowCount, // Use visible row count for "No."
+                        [headers[0]]: visibleRowCount,
                         [headers[1]]: rowData.psName,
                         [headers[2]]: rowData.voters,
                         [headers[3]]: rowData.ballotInfo.zpcNeeded ? 'Yes' : 'No',
@@ -323,48 +443,43 @@ document.addEventListener('DOMContentLoaded', () => {
                         [headers[8]]: rowData.ballotInfo.wardTotal,
                         [headers[9]]: rowData.ballotInfo.psTotal
                     });
+                 } else {
+                      console.warn(`Skipping row during export due to invalid index: ${row.dataset.rowIndex}`);
                  }
              }
         }
 
-         // Add summary row if needed (optional)
-         // dataToExport.push({}); // Empty row spacer
-         // dataToExport.push({ [headers[1]]: "Grand Total", [headers[9]]: totalAllBallots });
-
-
         if (!dataToExport.length) {
-            alert("No visible data to export (check filter?).");
+            alert("No data currently visible in the table to export (check filter?).");
             return;
         }
 
+        // Optional: Add a summary row for the *exported* (visible) data
+        dataToExport.push({}); // Empty spacer row
+        dataToExport.push({
+            [headers[1]]: "Visible Rows Total", // Label for summary
+             [headers[9]]: visibleTotalBallots // Sum of 'Total Ballots' for visible rows
+         });
+
+
         try {
-            // Create worksheet
-            const ws = XLSX.utils.json_to_sheet(dataToExport, { header: headers }); // Specify headers to ensure order
-
-            // Optional: Adjust column widths (more advanced)
-            // const columnWidths = [{wch:5}, {wch:30}, {wch:10}, {wch:10}, {wch:15}, {wch:10}, {wch:15}, {wch:10}, {wch:15}, {wch:15}];
-            // ws['!cols'] = columnWidths;
-
-            // Create workbook
+            const ws = XLSX.utils.json_to_sheet(dataToExport, { header: headers });
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Ballot Count Export");
-
-            // Trigger download
             XLSX.writeFile(wb, "Ballot_Count_Export.xlsx");
-
         } catch (error) {
             console.error("Error exporting to Excel:", error);
             alert(`An error occurred during export:\n${error.message}`);
         }
     }
 
-    // --- Tooltip Handlers ---
-    function handleTableMouseOver(event) {
+    // --- Tooltip Handlers (handleTableMouseOver, handleTableMouseOut, handleTableMouseMove - unchanged) ---
+        function handleTableMouseOver(event) {
         const row = event.target.closest('tr');
         if (row && row.dataset.rowIndex !== undefined) {
             const rowIndex = parseInt(row.dataset.rowIndex, 10);
-            const rowData = processedData[rowIndex];
-            if (rowData) {
+            if (rowIndex >= 0 && rowIndex < processedData.length){
+                const rowData = processedData[rowIndex];
                 const zpcText = rowData.candidates.zpc.length > 0 ? rowData.candidates.zpc.join(', ') : 'Uncontested or Nil';
                 const apText = rowData.candidates.ap.length > 0 ? rowData.candidates.ap.join(', ') : 'Uncontested or Nil';
                 const wardText = rowData.candidates.ward.length > 0 ? rowData.candidates.ward.join(', ') : 'Uncontested or Nil';
@@ -372,17 +487,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 const tooltipText = `ZPC Candidates: ${zpcText}\nAP Candidates:  ${apText}\nWard Candidates:${wardText}`;
                 tooltipElement.textContent = tooltipText;
                 tooltipElement.style.display = 'block';
-                // Position will be updated by mousemove
+            } else {
+                tooltipElement.style.display = 'none';
             }
         } else {
-             tooltipElement.style.display = 'none'; // Hide if not over a valid row
+             tooltipElement.style.display = 'none';
         }
     }
 
     function handleTableMouseOut(event) {
-        // Hide tooltip when mouse leaves the table body or the row itself
          const relatedTarget = event.relatedTarget;
-         // Check if the mouse is still within the table body or moving to the tooltip itself
          if (!ballotTableBody.contains(relatedTarget) && relatedTarget !== tooltipElement) {
             tooltipElement.style.display = 'none';
          }
@@ -390,39 +504,45 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function handleTableMouseMove(event) {
         if (tooltipElement.style.display === 'block') {
-            // Position tooltip slightly offset from the mouse cursor
-            // Adjust offsets as needed
             const xOffset = 15;
             const yOffset = 10;
-            tooltipElement.style.left = `${event.pageX + xOffset}px`;
-            tooltipElement.style.top = `${event.pageY + yOffset}px`;
+            // Ensure tooltip stays within viewport boundaries (basic example)
+            const scrollX = window.pageXOffset || document.documentElement.scrollLeft;
+            const scrollY = window.pageYOffset || document.documentElement.scrollTop;
+            let left = event.pageX + xOffset;
+            let top = event.pageY + yOffset;
+
+            tooltipElement.style.left = `${left}px`;
+            tooltipElement.style.top = `${top}px`;
+
+             // Basic boundary check (adjust as needed)
+            // const tooltipRect = tooltipElement.getBoundingClientRect();
+            // if (left + tooltipRect.width > window.innerWidth + scrollX) {
+            //     left = event.pageX - tooltipRect.width - xOffset;
+            // }
+            // if (top + tooltipRect.height > window.innerHeight + scrollY) {
+            //      top = event.pageY - tooltipRect.height - yOffset;
+            // }
+            // tooltipElement.style.left = `${left}px`;
+            // tooltipElement.style.top = `${top}px`;
         }
     }
 
-
-    // --- Contestant Names UI Functions ---
-
-    /**
-     * Populates the PS list in the Contestant Names UI.
-     */
+    // --- Contestant Names UI Functions (populatePsListUI, filterPsList, handlePsSelect, updateCandidateColumnsUI, clearCandidateColumnsUI - unchanged) ---
     function populatePsListUI() {
-        psList.innerHTML = ''; // Clear existing list
-        psSearchInput.value = ''; // Clear search
+        psList.innerHTML = '';
+        psSearchInput.value = '';
 
         if (!psNames.length) return;
 
-        psNames.forEach((name, index) => {
+        psNames.forEach((name) => { // No index needed if using psName directly
             const li = document.createElement('li');
             li.textContent = name;
-            // Store the original PS name or its index in processedData for easy lookup on click
-            li.dataset.psName = name;
+            li.dataset.psName = name; // Store name in data attribute
             psList.appendChild(li);
         });
     }
 
-    /**
-     * Filters the PS list based on the search input.
-     */
     function filterPsList() {
         const searchTerm = psSearchInput.value.trim().toLowerCase();
         const items = psList.getElementsByTagName('li');
@@ -430,53 +550,43 @@ document.addEventListener('DOMContentLoaded', () => {
         for (const item of items) {
             const psName = item.textContent.toLowerCase();
             if (psName.includes(searchTerm)) {
-                item.classList.remove('hidden'); // Show item
+                item.classList.remove('hidden');
             } else {
-                item.classList.add('hidden'); // Hide item
+                item.classList.add('hidden');
             }
         }
     }
 
-    /**
-     * Handles the selection of a PS from the list.
-     */
     function handlePsSelect(event) {
         if (event.target.tagName === 'LI') {
             const selectedLi = event.target;
             const psName = selectedLi.dataset.psName;
 
-             // Remove selected class from previously selected item
              const previouslySelected = psList.querySelector('.selected');
              if (previouslySelected) {
                  previouslySelected.classList.remove('selected');
              }
-             // Add selected class to the clicked item
              selectedLi.classList.add('selected');
-
 
             if (psName && psNameToIndexMap.hasOwnProperty(psName)) {
                 const index = psNameToIndexMap[psName];
-                const rowData = processedData[index];
-                if (rowData) {
+                if(index >= 0 && index < processedData.length){
+                    const rowData = processedData[index];
                     updateCandidateColumnsUI(rowData.candidates);
                 } else {
-                     console.error(`Data not found for PS Name: ${psName} at index ${index}`);
-                     clearCandidateColumnsUI(); // Clear display on error
+                    console.error(`Data index out of bounds for PS Name: ${psName} at index ${index}`);
+                    clearCandidateColumnsUI();
                 }
             } else {
                  console.error(`Could not find map entry for PS Name: ${psName}`);
-                 clearCandidateColumnsUI(); // Clear display if name not found in map
+                 clearCandidateColumnsUI();
             }
         }
     }
 
 
-    /**
-     * Updates the candidate columns in the Contestant Names UI.
-     * @param {object} candidates - Object containing zpc, ap, ward candidate arrays.
-     */
     function updateCandidateColumnsUI(candidates) {
-        clearCandidateColumnsUI(); // Clear previous content
+        clearCandidateColumnsUI();
 
         function populateList(listElement, candidateArray) {
             if (candidateArray && candidateArray.length > 0) {
@@ -498,14 +608,12 @@ document.addEventListener('DOMContentLoaded', () => {
         populateList(wardCandidateList, candidates.ward);
     }
 
-     /**
-     * Clears the candidate list columns in the Contestant Names UI.
-     */
     function clearCandidateColumnsUI() {
         zpcCandidateList.innerHTML = '';
         apCandidateList.innerHTML = '';
         wardCandidateList.innerHTML = '';
     }
+
 
     // --- UI State Management ---
 
@@ -518,37 +626,52 @@ document.addEventListener('DOMContentLoaded', () => {
             contestantNamesView.classList.add('active-view');
             currentView = 'contestant_names';
             switchViewButton.textContent = 'Switch to Ballot Count View';
-            document.title = 'Polling Station Candidate Viewer'; // Update page title
+            document.title = 'Polling Station Candidate Viewer';
         } else {
             contestantNamesView.classList.remove('active-view');
             ballotCountView.classList.add('active-view');
             currentView = 'ballot_count';
             switchViewButton.textContent = 'Switch to Contestant View';
-             document.title = 'Ballot Paper Requirements'; // Update page title
+             document.title = 'Ballot Paper Requirements';
         }
     }
 
      /**
-      * Enables UI controls after data is loaded.
+      * Enables UI controls after data is loaded successfully.
       */
      function enableControls() {
-         exportButton.disabled = false;
-         ballotSearchInput.disabled = false;
-         ballotSearchButton.disabled = false;
-         psSearchInput.disabled = false;
-         // psList interaction is handled via event listener, no need to disable/enable the UL itself
+         // Enable buttons regardless of data presence if needed,
+         // but inputs/export usually depend on data
+         loadFromUrlButton.disabled = false;
+         fileInput.disabled = false; // Re-enable file input label indirectly
+
+         if (processedData && processedData.length > 0) {
+             exportButton.disabled = false;
+             ballotSearchInput.disabled = false;
+             ballotSearchButton.disabled = false;
+             psSearchInput.disabled = false;
+         } else {
+             // Keep data-dependent controls disabled if no data processed
+             exportButton.disabled = true;
+             ballotSearchInput.disabled = true;
+             ballotSearchButton.disabled = true;
+             psSearchInput.disabled = true;
+         }
      }
 
      /**
-      * Disables UI controls and clears data (e.g., on error).
+      * Disables UI controls (e.g., during loading or on error).
       */
      function disableControls() {
+         loadFromUrlButton.disabled = true;
+         fileInput.disabled = true; // Disable file input indirectly
          exportButton.disabled = true;
          ballotSearchInput.disabled = true;
          ballotSearchButton.disabled = true;
-         ballotSearchInput.value = ''; // Clear search
          psSearchInput.disabled = true;
-         psSearchInput.value = ''; // Clear search
+         // Clear search inputs when disabling
+         // ballotSearchInput.value = '';
+         // psSearchInput.value = '';
      }
 
     /**
@@ -560,23 +683,23 @@ document.addEventListener('DOMContentLoaded', () => {
          psNames = [];
          psNameToIndexMap = {};
          totalAllBallots = 0;
+         isLoading = false; // Ensure loading flag is reset
 
          // Clear UI elements
-         ballotTableBody.innerHTML = '';
-         psList.innerHTML = '';
-         clearCandidateColumnsUI();
+         resetUIOnly(); // Use the UI clearing part
          ballotSummaryLabel.textContent = 'Load data to see totals.';
-         statusLabel.textContent = 'No file loaded.';
-         tooltipElement.style.display = 'none'; // Hide tooltip
+         statusLabel.textContent = 'No data loaded.';
+         googleSheetUrlInput.value = ''; // Clear URL input
+         ballotSearchInput.value = ''; // Clear search
+         psSearchInput.value = '';    // Clear search
 
          disableControls(); // Disable buttons/inputs
      }
 
 
     // --- Initial Setup ---
-    // Set the initial view (optional, default is ballot count as per HTML)
-    // switchView(); // Call only if you want the initial view to be different
-    // Initial state is controls disabled
-    disableControls();
+    disableControls(); // Start with controls disabled
+    // Set initial title (optional, can rely on HTML)
+    document.title = 'Ballot Paper Requirements';
 
 }); // End DOMContentLoaded
