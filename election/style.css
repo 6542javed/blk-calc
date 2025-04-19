@@ -118,6 +118,14 @@ label.button { /* Style label like a button */
     padding: 8px 15px;
 }
 
+/* Add this style to make the file input label look disabled */
+label.button.button-disabled {
+    background: #cccccc;
+    cursor: not-allowed;
+    /* Optional: reduce opacity */
+    /* opacity: 0.7; */
+}
+
 /* View Switching */
 .view {
     display: none; /* Hide views by default */
