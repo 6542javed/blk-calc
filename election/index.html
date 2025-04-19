@@ -4,21 +4,40 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Polling Station Data Processor</title>
-    <link rel="stylesheet" href="election/style.css">
+    <link rel="stylesheet" href="style.css">
     <!-- Include SheetJS library -->
-    <script lang="javascript" src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+    <script src="xlsx.full.min.js"></script>
 </head>
 <body>
     <div class="container">
         <!-- Top Bar: File Load, Status, Switch View -->
         <div class="top-bar">
-            <div class="file-loader">
-                <label for="excelFile" class="button">Load Excel File (.xlsx)</label>
-                <input type="file" id="excelFile" accept=".xlsx, .xls" style="display: none;">
-                <span id="statusLabel">No file loaded.</span>
+            <div class="input-options">
+                <!-- File Loader -->
+                <div class="file-loader">
+                    <label for="excelFile" class="button">Load Local File (.xlsx)</label>
+                    <input type="file" id="excelFile" accept=".xlsx, .xls" style="display: none;">
+                </div>
+                <!-- OR Separator -->
+                <span class="separator">OR</span>
+                <!-- Google Sheet Loader -->
+                <div class="url-loader">
+                     <input type="text" id="googleSheetUrl" placeholder="Paste Google Sheet 'Publish to web' CSV Link...">
+                     <button id="loadFromUrlButton" class="button">Load from URL</button>
+                </div>
             </div>
-            <button id="switchViewButton" class="button">Switch to Contestant View</button>
+             <div class="status-switch-container">
+                 <span id="statusLabel">No data loaded.</span>
+                 <button id="switchViewButton" class="button">Switch to Contestant View</button>
+             </div>
+
         </div>
+
+        <!-- Instruction Note -->
+        <p class="instruction-note">
+            <strong>Note:</strong> To load from Google Sheets, go to your sheet, click `File > Share > Publish to web`, select the specific sheet and `Comma-separated values (.csv)`, then click `Publish` and paste the generated link above. The sheet must be publicly accessible via this link.
+        </p>
+
 
         <!-- View Container: Ballot Count -->
         <div id="ballot-count-view" class="view active-view">
@@ -90,6 +109,6 @@
         </div>
     </div>
 
-    <script src="election/script.js"></script>
+    <script src="script.js"></script>
 </body>
 </html>
