@@ -24,23 +24,71 @@ body {
 
 /* Top Bar Styling */
 .top-bar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column; /* Stack input options and status/switch */
+    align-items: stretch; /* Make children fill width */
     padding-bottom: 15px;
     margin-bottom: 20px;
     border-bottom: 1px solid #ccc;
 }
 
-.file-loader {
+.input-options {
     display: flex;
     align-items: center;
+    gap: 15px; /* Space between File, OR, URL loaders */
+    margin-bottom: 15px; /* Space below input options */
+    flex-wrap: wrap; /* Allow wrapping on smaller screens */
+}
+
+.file-loader, .url-loader {
+    display: flex;
+    align-items: center;
+    gap: 5px; /* Space between elements within each loader */
+}
+
+.separator {
+    font-weight: bold;
+    color: #555;
+}
+
+#googleSheetUrl {
+    padding: 7px 10px; /* Slightly adjust padding */
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    min-width: 300px; /* Make URL input wider */
+    flex-grow: 1; /* Allow it to take available space */
+}
+
+.status-switch-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%; /* Take full width */
 }
 
 #statusLabel {
-    margin-left: 15px;
+    flex-grow: 1; /* Allow status label to take space */
+    text-align: left; /* Align status to the left */
+    margin-right: 15px; /* Add space before switch button */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis; /* Add ellipsis if text is too long */
     font-style: italic;
     color: #007bff;
+}
+
+/* Instruction Note Styling */
+.instruction-note {
+    font-size: 0.9em;
+    color: #444;
+    background-color: #eef;
+    border: 1px solid #cce;
+    padding: 10px;
+    border-radius: 5px;
+    margin-bottom: 20px; /* Space below the note */
+}
+
+.instruction-note strong {
+    color: #0056b3;
 }
 
 /* Button Styling */
@@ -288,4 +336,29 @@ label.button { /* Style label like a button */
 /* Helper class for hiding elements (e.g., filtered rows/list items) */
 .hidden {
     display: none;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .input-options {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+    .url-loader {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    #googleSheetUrl {
+        min-width: unset; /* Remove min-width on small screens */
+    }
+    .status-switch-container {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+    #statusLabel {
+        margin-right: 0;
+        white-space: normal; /* Allow wrapping */
+    }
 }
