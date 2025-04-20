@@ -243,6 +243,7 @@ label.button.button-disabled {
     padding: 10px;
     border-radius: 5px;
     background-color: #f9f9f9;
+    height: 90vh;
 }
 
 .left-pane h3 {
