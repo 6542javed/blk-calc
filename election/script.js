@@ -130,9 +130,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 processRawData(rawData, psNameHeader);
                 updateAllUIs();
                 statusLabel.textContent = `Loaded ${processedData.length} unique PS from: ${file.name}`;
-                lastLoadWasFromUrl = false; // Mark success from File
-                loadFromUrlButton.textContent = 'Load from URL'; // Ensure button text is reset
-
             } catch (error) {
                 handleLoadingError(error, "Error processing Excel file");
             } finally {
@@ -158,6 +155,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // --- Relaxed URL Check ---
+        // Check if it looks like a plausible Google Sheet /pub link containing output=csv
         if (!url.includes('/pub?') || !url.includes('output=csv')) {
              console.warn("URL format might be incorrect. Expected a Google Sheet 'Publish to web' CSV link (containing '/pub?' and 'output=csv'). Attempting to load anyway...");
             // Removed the alert that blocks loading
@@ -189,8 +187,6 @@ document.addEventListener('DOMContentLoaded', () => {
             processRawData(rawData, psNameHeader);
             updateAllUIs();
             statusLabel.textContent = `Loaded ${processedData.length} unique PS from URL.`;
-            lastLoadWasFromUrl = true; // Mark success from URL
-            loadFromUrlButton.textContent = 'Refresh Data from URL'; // Change button text
 
         } catch (error) {
              handleLoadingError(error, "Error loading from URL");
