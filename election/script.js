@@ -1,25 +1,19 @@
 document.addEventListener('DOMContentLoaded', () => {
     // --- Global State ---
     let rawData = [];
-    let originalRawDataString = ''; // Store stringified raw data for comparison
     let processedData = [];
     let psNames = [];
     let psNameToIndexMap = {};
     let currentView = 'ballot_count';
     let totalAllBallots = 0;
     let isLoading = false; // Flag to prevent concurrent loading
-    let googleSheetUrlUsed = null; // Store the URL used for loading
-    let autoRefreshIntervalId = null; // ID for setInterval
-    let isCheckingForUpdates = false; // Flag to prevent overlapping checks
-    const REFRESH_CHECK_INTERVAL = 10000; // Check every 10 seconds
 
     // --- DOM Element References ---
     const fileInput = document.getElementById('excelFile');
-    const fileInputLabel = document.querySelector('label[for="excelFile"]');
+    const fileInputLabel = document.querySelector('label[for="excelFile"]'); // Get label for styling
     const googleSheetUrlInput = document.getElementById('googleSheetUrl');
     const loadFromUrlButton = document.getElementById('loadFromUrlButton');
     const statusLabel = document.getElementById('statusLabel');
-    const updateNotificationArea = document.getElementById('updateNotificationArea'); // Get notification element
     const switchViewButton = document.getElementById('switchViewButton');
 
     // Ballot Count UI Elements
@@ -77,6 +71,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Core Logic Functions ---
 
+    /**
+     * Starts the loading process, updates UI accordingly.
+     */
     function startLoading(message = 'Loading data...') {
         if (isLoading) {
             console.warn("Already loading data.");
@@ -84,40 +81,38 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         isLoading = true;
         statusLabel.textContent = message;
-        updateNotificationArea.textContent = ''; // Clear notifications on new load
-        stopAutoRefreshCheck(); // Stop checking during load
-        setControlsState(true);
+        setControlsState(true); // Disable controls *during* load
         resetUIOnly();
         return true;
     }
 
+    /**
+     * Ends the loading process, updates UI accordingly.
+     */
     function endLoading() {
         isLoading = false;
-        setControlsState(false);
-        fileInput.value = '';
-        // Restart check ONLY if data was loaded from a URL
-        if (googleSheetUrlUsed) {
-            startAutoRefreshCheck(googleSheetUrlUsed);
-        }
+        setControlsState(false); // Set controls state based on data presence *after* load
+        fileInput.value = ''; // Reset file input value
     }
 
+    /**
+     * Clears UI elements without resetting the underlying data state.
+     */
     function resetUIOnly() {
         ballotTableBody.innerHTML = '';
         psList.innerHTML = '';
         clearCandidateColumnsUI();
         ballotSummaryLabel.textContent = 'Processing...';
         tooltipElement.style.display = 'none';
-        updateNotificationArea.textContent = ''; // Clear notification
     }
 
+    /**
+     * Handles loading local Excel file.
+     */
     function handleFileLoad(event) {
         const file = event.target.files[0];
         if (!file) return;
         if (!startLoading(`Loading file: ${file.name}...`)) return;
-
-        // Stop any previous URL checking
-        stopAutoRefreshCheck();
-        googleSheetUrlUsed = null; // Ensure URL is cleared
 
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -128,7 +123,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!sheetName) throw new Error("Excel file has no sheets.");
                 rawData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
                 if (!rawData.length) throw new Error(`Sheet '${sheetName}' is empty.`);
-                originalRawDataString = JSON.stringify(rawData); // Store for comparison (though not used for file)
                 const headers = Object.keys(rawData[0] || {});
                 const psNameHeader = headers.find(h => h.trim().toLowerCase() === 'ps name');
                 if (!psNameHeader) throw new Error("Required column 'PS Name' not found.");
@@ -139,31 +133,35 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (error) {
                 handleLoadingError(error, "Error processing Excel file");
             } finally {
-                endLoading(); // Will not restart timer as googleSheetUrlUsed is null
+                endLoading();
             }
         };
         reader.onerror = (e) => {
             console.error("FileReader error:", e);
             handleLoadingError(new Error("An error occurred while trying to read the file."), "File Read Error");
-            endLoading(); // Will not restart timer
+            endLoading(); // Ensure loading state is reset even on reader error
         };
         reader.readAsArrayBuffer(file);
     }
 
+    /**
+     * Handles loading data from Google Sheet URL.
+     */
     async function handleUrlLoad() {
         const url = googleSheetUrlInput.value.trim();
         if (!url) {
             alert("Please paste a Google Sheet 'Publish to web' CSV URL first.");
             return;
         }
+
+        // --- Relaxed URL Check ---
+        // Check if it looks like a plausible Google Sheet /pub link containing output=csv
         if (!url.includes('/pub?') || !url.includes('output=csv')) {
              console.warn("URL format might be incorrect. Expected a Google Sheet 'Publish to web' CSV link (containing '/pub?' and 'output=csv'). Attempting to load anyway...");
+            // Removed the alert that blocks loading
         }
 
         if (!startLoading(`Loading from URL...`)) return;
-
-        // Stop previous check if any (startLoading already does this, but being explicit)
-        stopAutoRefreshCheck();
 
         try {
             const response = await fetch(url);
@@ -175,12 +173,12 @@ document.addEventListener('DOMContentLoaded', () => {
                  throw new Error("Fetched data is empty. Check the Google Sheet or link.");
             }
 
+            // Use SheetJS to parse the CSV string
             const workbook = XLSX.read(csvText, { type: 'string', raw: true });
             const sheetName = workbook.SheetNames[0];
             if (!sheetName) throw new Error("Could not parse CSV data.");
             rawData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
              if (!rawData.length) throw new Error("CSV data is empty after parsing.");
-            originalRawDataString = JSON.stringify(rawData); // Store stringified version
 
             const headers = Object.keys(rawData[0] || {});
             const psNameHeader = headers.find(h => h.trim().toLowerCase() === 'ps name');
@@ -189,32 +187,31 @@ document.addEventListener('DOMContentLoaded', () => {
             processRawData(rawData, psNameHeader);
             updateAllUIs();
             statusLabel.textContent = `Loaded ${processedData.length} unique PS from URL.`;
-            googleSheetUrlUsed = url; // Store the successfully loaded URL
 
         } catch (error) {
              handleLoadingError(error, "Error loading from URL");
-             googleSheetUrlUsed = null; // Clear URL on error
         } finally {
-            endLoading(); // Will start timer ONLY if googleSheetUrlUsed was set successfully
+            endLoading();
         }
     }
 
+    /**
+     * Centralized error handling for loading processes.
+     */
     function handleLoadingError(error, contextMessage = "Error") {
          console.error(`${contextMessage}:`, error);
          statusLabel.textContent = `Error: ${error.message}`;
-         updateNotificationArea.textContent = ''; // Clear notification area on error
          alert(`${contextMessage}:\n${error.message}`);
-         stopAutoRefreshCheck(); // Stop checking on error
-         googleSheetUrlUsed = null; // Ensure URL is cleared
          resetApplicationState(false); // Reset state but keep load buttons enabled
-         // Ensure loading state is truly finished
-         isLoading = false;
-         setControlsState(false);
-         fileInput.value = '';
     }
 
+
+     /**
+     * Cleans raw data, handles duplicates, calculates necessary values.
+     * @param {object[]} sourceData - Data array from SheetJS (JSON).
+     * @param {string} psNameKey - The exact key found for 'PS Name'.
+     */
     function processRawData(sourceData, psNameKey) {
-        // ... (processRawData remains exactly the same)
         processedData = [];
         psNameToIndexMap = {};
         psNames = [];
@@ -223,9 +220,11 @@ document.addEventListener('DOMContentLoaded', () => {
         sourceData.forEach((rawRow, index) => {
             const originalPsName = String(rawRow[psNameKey] || '').trim();
             if (!originalPsName) {
+                // console.warn(`Skipping row ${index + 2} (source) due to empty PS Name.`);
                 return;
             }
             if (seenPsNames.has(originalPsName)) {
+                // console.warn(`Skipping duplicate PS Name: "${originalPsName}" at row ${index + 2} (source).`);
                 return;
             }
             seenPsNames.add(originalPsName);
@@ -266,8 +265,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    /**
+    * Helper to find a value in an object using a case-insensitive key.
+    */
     function findValueCaseInsensitive(obj, targetKey) {
-        // ... (findValueCaseInsensitive remains exactly the same)
         if (!obj || typeof targetKey !== 'string') return undefined;
         const lowerTargetKey = targetKey.toLowerCase();
         for (const key in obj) {
@@ -278,7 +279,10 @@ document.addEventListener('DOMContentLoaded', () => {
         return undefined;
     }
 
-    function updateAllUIs() {
+    /**
+     * Central function to trigger updates for both UI views.
+     */
+     function updateAllUIs() {
          updateBallotTableUI();
          populatePsListUI();
          clearCandidateColumnsUI();
@@ -288,8 +292,8 @@ document.addEventListener('DOMContentLoaded', () => {
          }
      }
 
-    // --- UI Update Functions (updateBallotTableUI, filterBallotTable, Tooltip Handlers, populatePsListUI, filterPsList, handlePsSelect, updateCandidateColumnsUI, clearCandidateColumnsUI - unchanged) ---
-    function updateBallotTableUI() {
+    // --- UI Update Functions (updateBallotTableUI, filterBallotTable, Tooltip Handlers, populatePsListUI, filterPsList, handlePsSelect, updateCandidateColumnsUI, clearCandidateColumnsUI - unchanged from previous correct versions) ---
+        function updateBallotTableUI() {
         ballotTableBody.innerHTML = '';
         totalAllBallots = 0;
         if (!processedData.length) {
@@ -407,8 +411,11 @@ document.addEventListener('DOMContentLoaded', () => {
         wardCandidateList.innerHTML = '';
     }
 
-    function exportBallotTable() {
-        // ... (exportBallotTable remains exactly the same)
+    /**
+     * Exports the current data *visible* in the ballot table view to an Excel file.
+     */
+     function exportBallotTable() {
+        // (Keep the previously corrected export logic that handles visible rows)
         if (!processedData.length) {
             alert("No data available to export."); return;
         }
@@ -455,8 +462,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- UI State Management ---
 
+    /**
+     * Switches the visible UI view.
+     */
     function switchView() {
-        // ... (switchView remains exactly the same)
         if (currentView === 'ballot_count') {
             ballotCountView.classList.remove('active-view');
             contestantNamesView.classList.add('active-view');
@@ -472,40 +481,52 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    /**
+      * Sets the enabled/disabled state of UI controls based on loading status and data presence.
+      * @param {boolean} loading - Is data currently being loaded?
+      */
     function setControlsState(loading) {
-        // ... (setControlsState remains exactly the same)
         const hasData = processedData && processedData.length > 0;
 
+        // Primary load actions are disabled *only* when loading
         loadFromUrlButton.disabled = loading;
-        fileInput.disabled = loading;
+        fileInput.disabled = loading; // Disable the input itself
+        // Style the label to look disabled when the input is disabled
         if (fileInputLabel) {
             fileInputLabel.classList.toggle('button-disabled', loading);
         }
 
+
+        // Data-dependent actions are disabled if loading OR if no data exists
         exportButton.disabled = loading || !hasData;
         ballotSearchInput.disabled = loading || !hasData;
         ballotSearchButton.disabled = loading || !hasData;
         psSearchInput.disabled = loading || !hasData;
 
+        // Clear search fields if they are being disabled and previously had data
         if (loading || !hasData) {
             ballotSearchInput.value = '';
             psSearchInput.value = '';
+             // Also clear visual filters if controls are disabled
              filterBallotTable();
              filterPsList();
         }
     }
 
-    function resetApplicationState(clearStatus = true) {
+
+    /**
+     * Resets the application state (clears data, UI, disables controls).
+     * @param {boolean} [clearStatus=true] - Whether to reset the status label.
+     */
+     function resetApplicationState(clearStatus = true) {
          rawData = [];
-         originalRawDataString = ''; // Reset stored data string
          processedData = [];
          psNames = [];
          psNameToIndexMap = {};
          totalAllBallots = 0;
-         stopAutoRefreshCheck(); // Stop checking
-         googleSheetUrlUsed = null; // Clear URL
+         // isLoading should be reset by endLoading
 
-         resetUIOnly();
+         resetUIOnly(); // Clear UI tables/lists
          ballotSummaryLabel.textContent = 'Load data to see totals.';
          googleSheetUrlInput.value = '';
          ballotSearchInput.value = '';
@@ -514,100 +535,13 @@ document.addEventListener('DOMContentLoaded', () => {
          if (clearStatus) {
             statusLabel.textContent = 'No data loaded.';
          }
-         updateNotificationArea.textContent = ''; // Clear notification
 
-         setControlsState(isLoading); // Update controls (usually false after reset)
+         setControlsState(isLoading); // Update controls based on current loading state (usually false after reset)
      }
-
-    // --- Auto-Refresh Logic ---
-
-    /**
-     * Stops the periodic check for Google Sheet updates.
-     */
-    function stopAutoRefreshCheck() {
-        if (autoRefreshIntervalId) {
-            clearInterval(autoRefreshIntervalId);
-            autoRefreshIntervalId = null;
-            // console.log("Stopped auto-refresh check.");
-        }
-         // Optionally clear the notification when stopping implicitly
-         // updateNotificationArea.textContent = '';
-    }
-
-    /**
-     * Starts the periodic check for Google Sheet updates.
-     * @param {string} url - The Google Sheet URL to check.
-     */
-    function startAutoRefreshCheck(url) {
-        stopAutoRefreshCheck(); // Clear any existing timer first
-        if (!url) return; // Don't start if no URL is provided
-
-        // console.log(`Starting auto-refresh check for ${url} every ${REFRESH_CHECK_INTERVAL / 1000}s`);
-        autoRefreshIntervalId = setInterval(async () => {
-            await checkForUpdates(url);
-        }, REFRESH_CHECK_INTERVAL);
-    }
-
-    /**
-     * Fetches data from the URL and compares it to the currently loaded data.
-     * Shows a notification if changes are detected.
-     * @param {string} url - The Google Sheet URL to check.
-     */
-    async function checkForUpdates(url) {
-        if (isLoading || isCheckingForUpdates || !url) {
-            // Don't check if a main load is happening, or another check is in progress, or url is invalid
-            return;
-        }
-
-        isCheckingForUpdates = true;
-        // console.log("Checking for updates...");
-
-        try {
-            const response = await fetch(url + '&t=' + Date.now()); // Add timestamp to try bypassing cache
-            if (!response.ok) {
-                // Don't notify user about background check failures, just log
-                console.warn(`Auto-check failed: Status ${response.status}`);
-                return; // Exit check function
-            }
-            const csvText = await response.text();
-            if (!csvText) {
-                 console.warn("Auto-check failed: Fetched data is empty.");
-                 return;
-            }
-
-            const workbook = XLSX.read(csvText, { type: 'string', raw: true });
-            const sheetName = workbook.SheetNames[0];
-            if (!sheetName) {
-                 console.warn("Auto-check failed: Could not parse CSV data.");
-                 return;
-            }
-            const newData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
-            const newDataString = JSON.stringify(newData);
-
-            // Compare stringified versions of the raw data
-            if (newDataString !== originalRawDataString) {
-                console.log("Data has changed on the server!");
-                updateNotificationArea.textContent = "Source data updated! Reload to see changes.";
-                // Optional: Stop checking once an update is found to avoid repeated notifications
-                 // stopAutoRefreshCheck();
-            } else {
-                 // console.log("No changes detected.");
-                 // Optionally clear notification if data matches again (e.g., user reloaded elsewhere)
-                 // updateNotificationArea.textContent = '';
-            }
-
-        } catch (error) {
-            // Log background errors silently
-            console.error("Error during auto-check:", error);
-        } finally {
-            isCheckingForUpdates = false; // Allow next check
-        }
-    }
 
 
     // --- Initial Setup ---
     setControlsState(false); // Initial state: not loading, no data
     document.title = 'Ballot Paper Requirements';
-    updateNotificationArea.textContent = ''; // Ensure notification area is clear initially
 
 }); // End DOMContentLoaded
