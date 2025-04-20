@@ -84,7 +84,11 @@ body {
     border: 1px solid #cce;
     padding: 10px;
     border-radius: 5px;
+<<<<<<< HEAD
     margin-bottom: 10px; /* Reduced space below this note */
+=======
+    margin-bottom: 20px; /* Space below the note */
+>>>>>>> parent of 7398647 (added auto refresh)
 }
 
 .instruction-note strong {
@@ -377,6 +381,18 @@ label.button.button-disabled {
     }
     #googleSheetUrl {
         min-width: unset; /* Remove min-width on small screens */
+<<<<<<< HEAD
+=======
+    }
+    .status-switch-container {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+    #statusLabel {
+        margin-right: 0;
+        white-space: normal; /* Allow wrapping */
+>>>>>>> parent of 7398647 (added auto refresh)
     }
     .status-switch-container {
         flex-direction: column;
