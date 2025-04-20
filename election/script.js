@@ -7,10 +7,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentView = 'ballot_count';
     let totalAllBallots = 0;
     let isLoading = false; // Flag to prevent concurrent loading
-<<<<<<< HEAD
-    let lastLoadWasFromUrl = false; // Track source of last successful load
-=======
->>>>>>> parent of 7398647 (added auto refresh)
 
     // --- DOM Element References ---
     const fileInput = document.getElementById('excelFile');
@@ -162,10 +158,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // --- Relaxed URL Check ---
-<<<<<<< HEAD
-=======
-        // Check if it looks like a plausible Google Sheet /pub link containing output=csv
->>>>>>> parent of 7398647 (added auto refresh)
         if (!url.includes('/pub?') || !url.includes('output=csv')) {
              console.warn("URL format might be incorrect. Expected a Google Sheet 'Publish to web' CSV link (containing '/pub?' and 'output=csv'). Attempting to load anyway...");
             // Removed the alert that blocks loading
@@ -197,11 +189,8 @@ document.addEventListener('DOMContentLoaded', () => {
             processRawData(rawData, psNameHeader);
             updateAllUIs();
             statusLabel.textContent = `Loaded ${processedData.length} unique PS from URL.`;
-<<<<<<< HEAD
             lastLoadWasFromUrl = true; // Mark success from URL
             loadFromUrlButton.textContent = 'Refresh Data from URL'; // Change button text
-=======
->>>>>>> parent of 7398647 (added auto refresh)
 
         } catch (error) {
              handleLoadingError(error, "Error loading from URL");
