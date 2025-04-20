@@ -307,11 +307,7 @@ document.addEventListener('DOMContentLoaded', () => {
          }
      }
 
-<<<<<<< HEAD
-    // --- UI Update Functions (updateBallotTableUI, filterBallotTable, Tooltip Handlers, populatePsListUI, filterPsList, handlePsSelect, updateCandidateColumnsUI, clearCandidateColumnsUI - unchanged) ---
-=======
     // --- UI Update Functions (updateBallotTableUI, filterBallotTable, Tooltip Handlers, populatePsListUI, filterPsList, handlePsSelect, updateCandidateColumnsUI, clearCandidateColumnsUI - unchanged from previous correct versions) ---
->>>>>>> parent of 7398647 (added auto refresh)
         function updateBallotTableUI() {
         ballotTableBody.innerHTML = '';
         totalAllBallots = 0;
@@ -434,11 +430,7 @@ document.addEventListener('DOMContentLoaded', () => {
      * Exports the current data *visible* in the ballot table view to an Excel file.
      */
      function exportBallotTable() {
-<<<<<<< HEAD
-        // (Unchanged export logic)
-=======
         // (Keep the previously corrected export logic that handles visible rows)
->>>>>>> parent of 7398647 (added auto refresh)
         if (!processedData.length) {
             alert("No data available to export."); return;
         }
@@ -548,11 +540,6 @@ document.addEventListener('DOMContentLoaded', () => {
          psNameToIndexMap = {};
          totalAllBallots = 0;
          // isLoading should be reset by endLoading
-<<<<<<< HEAD
-         lastLoadWasFromUrl = false; // Reset the flag
-         loadFromUrlButton.textContent = 'Load from URL'; // Reset button text
-=======
->>>>>>> parent of 7398647 (added auto refresh)
 
          resetUIOnly(); // Clear UI tables/lists
          ballotSummaryLabel.textContent = 'Load data to see totals.';
