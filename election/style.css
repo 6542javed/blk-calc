@@ -84,12 +84,29 @@ body {
     border: 1px solid #cce;
     padding: 10px;
     border-radius: 5px;
-    margin-bottom: 20px; /* Space below the note */
+    margin-bottom: 10px; /* Reduced space below this note */
 }
 
 .instruction-note strong {
     color: #0056b3;
 }
+
+/* Refresh Instruction Styling */
+.refresh-instruction {
+    font-size: 0.9em;
+    color: #8b4513; /* SaddleBrown or similar */
+    background-color: #fff8dc; /* Cornsilk */
+    border: 1px solid #e0d8b0; /* Lighter brown/tan */
+    padding: 10px;
+    border-radius: 5px;
+    margin-bottom: 20px; /* Space below the note */
+    text-align: center; /* Center align text */
+}
+
+.refresh-instruction strong {
+    color: #a0522d; /* Sienna */
+}
+
 
 /* Button Styling */
 .button {

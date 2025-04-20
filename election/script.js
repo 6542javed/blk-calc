@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentView = 'ballot_count';
     let totalAllBallots = 0;
     let isLoading = false; // Flag to prevent concurrent loading
+    let lastLoadWasFromUrl = false; // Track source of last successful load
 
     // --- DOM Element References ---
     const fileInput = document.getElementById('excelFile');
@@ -130,6 +131,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 processRawData(rawData, psNameHeader);
                 updateAllUIs();
                 statusLabel.textContent = `Loaded ${processedData.length} unique PS from: ${file.name}`;
+                lastLoadWasFromUrl = false; // Mark success from File
+                loadFromUrlButton.textContent = 'Load from URL'; // Ensure button text is reset
+
             } catch (error) {
                 handleLoadingError(error, "Error processing Excel file");
             } finally {
@@ -155,10 +159,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // --- Relaxed URL Check ---
-        // Check if it looks like a plausible Google Sheet /pub link containing output=csv
         if (!url.includes('/pub?') || !url.includes('output=csv')) {
              console.warn("URL format might be incorrect. Expected a Google Sheet 'Publish to web' CSV link (containing '/pub?' and 'output=csv'). Attempting to load anyway...");
-            // Removed the alert that blocks loading
         }
 
         if (!startLoading(`Loading from URL...`)) return;
@@ -187,6 +189,8 @@ document.addEventListener('DOMContentLoaded', () => {
             processRawData(rawData, psNameHeader);
             updateAllUIs();
             statusLabel.textContent = `Loaded ${processedData.length} unique PS from URL.`;
+            lastLoadWasFromUrl = true; // Mark success from URL
+            loadFromUrlButton.textContent = 'Refresh Data from URL'; // Change button text
 
         } catch (error) {
              handleLoadingError(error, "Error loading from URL");
@@ -292,7 +296,7 @@ document.addEventListener('DOMContentLoaded', () => {
          }
      }
 
-    // --- UI Update Functions (updateBallotTableUI, filterBallotTable, Tooltip Handlers, populatePsListUI, filterPsList, handlePsSelect, updateCandidateColumnsUI, clearCandidateColumnsUI - unchanged from previous correct versions) ---
+    // --- UI Update Functions (updateBallotTableUI, filterBallotTable, Tooltip Handlers, populatePsListUI, filterPsList, handlePsSelect, updateCandidateColumnsUI, clearCandidateColumnsUI - unchanged) ---
         function updateBallotTableUI() {
         ballotTableBody.innerHTML = '';
         totalAllBallots = 0;
@@ -415,7 +419,7 @@ document.addEventListener('DOMContentLoaded', () => {
      * Exports the current data *visible* in the ballot table view to an Excel file.
      */
      function exportBallotTable() {
-        // (Keep the previously corrected export logic that handles visible rows)
+        // (Unchanged export logic)
         if (!processedData.length) {
             alert("No data available to export."); return;
         }
@@ -525,6 +529,8 @@ document.addEventListener('DOMContentLoaded', () => {
          psNameToIndexMap = {};
          totalAllBallots = 0;
          // isLoading should be reset by endLoading
+         lastLoadWasFromUrl = false; // Reset the flag
+         loadFromUrlButton.textContent = 'Load from URL'; // Reset button text
 
          resetUIOnly(); // Clear UI tables/lists
          ballotSummaryLabel.textContent = 'Load data to see totals.';
