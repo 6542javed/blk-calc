@@ -14,7 +14,7 @@ body {
 }
 
 .container {
-    max-width: 1400px; /* Adjust as needed */
+    max-width: 1400px;
     margin: auto;
     background: #fff;
     padding: 20px;
@@ -24,8 +24,8 @@ body {
 
 /* Top Bar Styling */
 .top-bar {
-    flex-direction: column; /* Stack input options and status/switch */
-    align-items: stretch; /* Make children fill width */
+    flex-direction: column;
+    align-items: stretch;
     padding-bottom: 15px;
     margin-bottom: 20px;
     border-bottom: 1px solid #ccc;
@@ -34,15 +34,15 @@ body {
 .input-options {
     display: flex;
     align-items: center;
-    gap: 15px; /* Space between File, OR, URL loaders */
-    margin-bottom: 15px; /* Space below input options */
-    flex-wrap: wrap; /* Allow wrapping on smaller screens */
+    gap: 15px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
 }
 
 .file-loader, .url-loader {
     display: flex;
     align-items: center;
-    gap: 5px; /* Space between elements within each loader */
+    gap: 5px;
 }
 
 .separator {
@@ -51,29 +51,48 @@ body {
 }
 
 #googleSheetUrl {
-    padding: 7px 10px; /* Slightly adjust padding */
+    padding: 7px 10px;
     border: 1px solid #ccc;
     border-radius: 4px;
-    min-width: 300px; /* Make URL input wider */
-    flex-grow: 1; /* Allow it to take available space */
+    min-width: 300px;
+    flex-grow: 1;
 }
 
+/* Updated status-switch-container and statusLabel */
 .status-switch-container {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    width: 100%; /* Take full width */
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 10px;
 }
 
 #statusLabel {
-    flex-grow: 1; /* Allow status label to take space */
-    text-align: left; /* Align status to the left */
-    margin-right: 15px; /* Add space before switch button */
+    text-align: left;
+    margin-right: 10px;
     white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis; /* Add ellipsis if text is too long */
+    text-overflow: ellipsis;
     font-style: italic;
     color: #007bff;
+    flex-shrink: 1;
+}
+
+#updateNotificationArea {
+    color: #dc3545;
+    font-weight: bold;
+    font-size: 0.9em;
+    text-align: right;
+    flex-grow: 1;
+    margin-right: 10px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#switchViewButton {
+    flex-shrink: 0;
 }
 
 /* Instruction Note Styling */
@@ -84,7 +103,7 @@ body {
     border: 1px solid #cce;
     padding: 10px;
     border-radius: 5px;
-    margin-bottom: 20px; /* Space below the note */
+    margin-bottom: 20px;
 }
 
 .instruction-note strong {
@@ -114,25 +133,22 @@ body {
     cursor: not-allowed;
 }
 
-label.button { /* Style label like a button */
+label.button {
     padding: 8px 15px;
 }
 
-/* Add this style to make the file input label look disabled */
 label.button.button-disabled {
     background: #cccccc;
     cursor: not-allowed;
-    /* Optional: reduce opacity */
-    /* opacity: 0.7; */
 }
 
 /* View Switching */
 .view {
-    display: none; /* Hide views by default */
+    display: none;
 }
 
 .view.active-view {
-    display: block; /* Show the active view */
+    display: block;
 }
 
 /* Ballot Count View Specific Styles */
@@ -147,7 +163,7 @@ label.button.button-disabled {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 15px;
-    flex-wrap: wrap; /* Allow wrapping on smaller screens */
+    flex-wrap: wrap;
     gap: 10px;
 }
 
@@ -172,8 +188,8 @@ label.button.button-disabled {
 }
 
 .table-container {
-    overflow-x: auto; /* Allow horizontal scrolling for table */
-    max-height: 500px; /* Limit table height and add vertical scroll */
+    overflow-x: auto;
+    max-height: 500px;
     overflow-y: auto;
     border: 1px solid #ccc;
 }
@@ -188,13 +204,13 @@ label.button.button-disabled {
     border: 1px solid #ddd;
     padding: 8px 10px;
     text-align: center;
-    white-space: nowrap; /* Prevent text wrapping in cells */
+    white-space: nowrap;
 }
 
 #ballotTable th {
     background-color: #f2f2f2;
     font-weight: bold;
-    position: sticky; /* Make header sticky */
+    position: sticky;
     top: 0;
     z-index: 1;
 }
@@ -204,12 +220,12 @@ label.button.button-disabled {
 }
 
 #ballotTable tbody tr:hover {
-    background-color: #e8f4ff; /* Highlight on hover */
+    background-color: #e8f4ff;
 }
 
-#ballotTable td:nth-child(2) { /* PS Name column */
+#ballotTable td:nth-child(2) {
     text-align: left;
-    white-space: normal; /* Allow PS Name to wrap */
+    white-space: normal;
     min-width: 180px;
 }
 
@@ -221,10 +237,10 @@ label.button.button-disabled {
     padding: 5px 8px;
     border-radius: 4px;
     font-size: 0.85em;
-    white-space: pre-wrap; /* Respect newlines in tooltip text */
+    white-space: pre-wrap;
     z-index: 1000;
-    display: none; /* Hidden by default */
-    pointer-events: none; /* Prevent tooltip from blocking mouse events */
+    display: none;
+    pointer-events: none;
     box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
 }
 
@@ -232,11 +248,11 @@ label.button.button-disabled {
 .paned-layout {
     display: flex;
     gap: 20px;
-    min-height: 500px; /* Ensure layout takes space */
+    min-height: 500px;
 }
 
 .left-pane {
-    flex: 0 0 350px; /* Fixed width for left pane */
+    flex: 0 0 350px;
     display: flex;
     flex-direction: column;
     border: 1px solid #ccc;
@@ -258,7 +274,7 @@ label.button.button-disabled {
 }
 
 .list-container {
-    flex-grow: 1; /* Allow list to fill available space */
+    flex-grow: 1;
     overflow-y: auto;
     border: 1px solid #ddd;
     background-color: #fff;
@@ -293,7 +309,7 @@ label.button.button-disabled {
 }
 
 .right-pane {
-    flex-grow: 1; /* Right pane takes remaining space */
+    flex-grow: 1;
     display: flex;
     gap: 15px;
     border: 1px solid #ccc;
@@ -303,7 +319,7 @@ label.button.button-disabled {
 }
 
 .candidate-column {
-    flex: 1; /* Each column takes equal space */
+    flex: 1;
     display: flex;
     flex-direction: column;
     background-color: #fff;
@@ -325,7 +341,7 @@ label.button.button-disabled {
     padding: 0;
     margin: 0;
     flex-grow: 1;
-    overflow-y: auto; /* Allow scrolling within each column list */
+    overflow-y: auto;
     font-size: 0.95em;
 }
 
@@ -333,6 +349,7 @@ label.button.button-disabled {
     padding: 6px 8px;
     border-bottom: 1px solid #f0f0f0;
 }
+
 .candidate-list li:last-child {
     border-bottom: none;
 }
@@ -342,12 +359,33 @@ label.button.button-disabled {
     font-style: italic;
 }
 
-/* Helper class for hiding elements (e.g., filtered rows/list items) */
+/* Helper class for hiding elements */
 .hidden {
     display: none;
 }
 
 /* Responsive adjustments */
+@media (max-width: 900px) {
+    .status-switch-container {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 5px;
+    }
+    #statusLabel {
+        margin-right: 0;
+        white-space: normal;
+        text-align: left;
+        width: 100%;
+        margin-bottom: 5px;
+    }
+    #updateNotificationArea {
+        text-align: left;
+        margin-right: 0;
+        width: 100%;
+        margin-bottom: 10px;
+    }
+}
+
 @media (max-width: 768px) {
     .input-options {
         flex-direction: column;
@@ -359,15 +397,6 @@ label.button.button-disabled {
         align-items: stretch;
     }
     #googleSheetUrl {
-        min-width: unset; /* Remove min-width on small screens */
-    }
-    .status-switch-container {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 10px;
-    }
-    #statusLabel {
-        margin-right: 0;
-        white-space: normal; /* Allow wrapping */
+        min-width: unset;
     }
 }
