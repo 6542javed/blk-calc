@@ -15,6 +15,7 @@ body {
 
 .container {
     max-width: 1400px; /* Adjust as needed */
+    width: 90vw; /* For hover data to not get hidden */
     margin: auto;
     background: #fff;
     padding: 20px;
