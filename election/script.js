@@ -482,6 +482,9 @@ document.addEventListener('DOMContentLoaded', () => {
      * Switches the visible UI view.
      */
     function switchView() {
+        //exit function (bypass)
+        return;
+        
         if (currentView === 'ballot_count') {
             ballotCountView.classList.remove('active-view');
             contestantNamesView.classList.add('active-view');
