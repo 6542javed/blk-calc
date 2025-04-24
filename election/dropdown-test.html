@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hierarchical PS Selector Test</title>
+    <title>Hierarchical PS Selector & Candidate Viewer</title>
     <!-- Include SheetJS library -->
     <script lang="javascript" src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
     <style>
@@ -20,6 +20,54 @@
         select:disabled { background-color: #e9ecef; }
         #status { margin-top: 15px; font-style: italic; color: #555; }
         .hidden { display: none; }
+
+        /* Styles for Candidate Display Area */
+        #candidateDisplay {
+            margin-top: 30px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        #candidateDisplay h2 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+            font-size: 1.2em;
+        }
+        .candidate-columns {
+            display: flex;
+            gap: 20px;
+            justify-content: space-around; /* Distribute columns */
+        }
+        .candidate-column {
+            flex: 1; /* Allow columns to grow equally */
+            min-width: 150px; /* Prevent columns from becoming too narrow */
+        }
+        .candidate-column h3 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            font-size: 1em;
+            color: #333;
+        }
+        .candidate-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            font-size: 0.9em;
+        }
+        .candidate-list li {
+            padding: 4px 0;
+            border-bottom: 1px dashed #eee;
+        }
+        .candidate-list li:last-child {
+            border-bottom: none;
+        }
+        .candidate-list .uncontested {
+            font-style: italic;
+            color: #888;
+        }
     </style>
 </head>
 <body>
@@ -64,6 +112,27 @@
                 </select>
             </div>
         </div>
+
+        <!-- Candidate Display Area (Initially Hidden) -->
+        <div id="candidateDisplay" class="hidden">
+             <h2>Candidates for Selected PS</h2>
+             <div class="candidate-columns">
+                <div class="candidate-column">
+                    <h3>ZPC Candidates</h3>
+                    <ul id="zpcCandidateList" class="candidate-list"></ul>
+                </div>
+                <div class="candidate-column">
+                    <h3>AP Candidates</h3>
+                    <ul id="apCandidateList" class="candidate-list"></ul>
+                </div>
+                <div class="candidate-column">
+                    <h3>Ward Candidates</h3>
+                    <ul id="wardCandidateList" class="candidate-list"></ul>
+                </div>
+            </div>
+        </div>
+        <!-- End Candidate Display Area -->
+
     </div>
 
     <script>
@@ -78,9 +147,16 @@
             const wardSelect = document.getElementById('wardSelect');
             const psSelect = document.getElementById('psSelect');
 
+            // Candidate Display Elements
+            const candidateDisplayDiv = document.getElementById('candidateDisplay');
+            const zpcCandidateList = document.getElementById('zpcCandidateList');
+            const apCandidateList = document.getElementById('apCandidateList');
+            const wardCandidateList = document.getElementById('wardCandidateList');
+
             // --- Global State ---
             let rawData = [];
             let hierarchy = new Map(); // Map<zpc, Map<ap, Map<gp, Map<ward, Set<ps>>>>>
+            let psCandidateData = new Map(); // Map<formattedPsName, {zpc: [], ap: [], ward: []}>
             let headerMap = {}; // To store actual header names found
 
             // --- Constants ---
@@ -89,17 +165,22 @@
             const GP_KEY = 'gp name';
             const WARD_KEY = 'ward name';
             const PS_KEY = 'ps name';
-            // Add keys for the number columns
             const ZPC_NO_KEY = 'zpc no.';
             const AP_NO_KEY = 'ap no.';
             const GP_NO_KEY = 'gp no.';
             const WARD_NO_KEY = 'ward no.';
             const PS_NO_KEY = 'ps no.';
+            // Add candidate prefixes (ensure these match your sheet headers *start*)
+            const ZPC_CANDIDATE_PREFIX = 'ZPM';
+            const AP_CANDIDATE_PREFIX = 'APM';
+            const WARD_CANDIDATE_PREFIX = 'GPM';
 
             const REQ_KEYS = [
                 ZPC_KEY, AP_KEY, GP_KEY, WARD_KEY, PS_KEY,
                 ZPC_NO_KEY, AP_NO_KEY, GP_NO_KEY, WARD_NO_KEY, PS_NO_KEY
             ];
+            // Note: Candidate columns are not strictly required for the dropdowns,
+            // but are required for the candidate display feature. Add checks if needed.
 
             // --- Event Listeners ---
             loadButton.addEventListener('click', handleUrlLoad);
@@ -107,6 +188,7 @@
             apSelect.addEventListener('change', handleApChange);
             gpSelect.addEventListener('change', handleGpChange);
             wardSelect.addEventListener('change', handleWardChange);
+            psSelect.addEventListener('change', handlePsSelectChange); // Listener for the final PS dropdown
 
             // --- Utility Functions ---
             function findHeaderKey(headers, targetKey) {
@@ -128,7 +210,7 @@
                     opt.textContent = option;
                     selectElement.appendChild(opt);
                 });
-                selectElement.disabled = false;
+                selectElement.disabled = options.length === 0; // Disable if no options
             }
 
             function resetDropdown(selectElement, placeholder) {
@@ -143,6 +225,7 @@
                 resetDropdown(gpSelect, 'Select GP');
                 resetDropdown(wardSelect, 'Select Ward');
                 resetDropdown(psSelect, 'Select PS');
+                clearAndHideCandidates(); // Also reset candidate display
             }
 
              function setLoadingState(loading) {
@@ -150,12 +233,56 @@
                 urlInput.disabled = loading;
                 if (loading) {
                     statusLabel.textContent = 'Loading data...';
-                    resetAllDropdowns(); // Disable dropdowns while loading
+                    resetAllDropdowns(); // Disable dropdowns and clear candidates while loading
                 } else {
                     // Status will be updated on success/error
                 }
              }
 
+            // --- Candidate Helper Functions ---
+            // Copied from script.js
+            function getCandidateNamesJS(row, prefix) {
+                const candidates = [];
+                if (!row) return candidates;
+                // Find actual header keys that *start with* the prefix (case-insensitive)
+                const matchingHeaders = Object.keys(row).filter(key =>
+                    typeof key === 'string' && key.trim().toLowerCase().startsWith(prefix.toLowerCase())
+                );
+
+                // Sort matching headers to maintain a consistent order if needed (e.g., ZPM1, ZPM2)
+                // This simple sort works if headers are like 'ZPM1', 'ZPM10', 'ZPM2'
+                // A more robust natural sort might be needed for complex cases.
+                matchingHeaders.sort();
+
+                for (const key of matchingHeaders) {
+                    let value = row[key];
+                    if (value !== null && value !== undefined) {
+                        const strValue = String(value).trim();
+                        // Consider 'nil', 'NIL', 'Nil', etc. as non-candidates
+                        if (strValue && strValue.toLowerCase() !== 'nil') {
+                            candidates.push(strValue);
+                        }
+                    }
+                }
+                return candidates;
+            }
+
+            // Helper to format No - Name, handling missing parts
+            function formatNoName(no, name) {
+                const numStr = String(no || '').trim();
+                const nameStr = String(name || '').trim();
+
+                if (numStr && nameStr) {
+                    // Standardize the separator
+                    return `${numStr} - ${nameStr}`;
+                } else if (nameStr) {
+                    return nameStr; // Fallback to just name if no is missing
+                } else if (numStr) {
+                    return numStr; // Fallback to just no if name is missing
+                } else {
+                    return ''; // Should not happen if validation works, but safe fallback
+                }
+            }
 
             // --- Core Logic Functions ---
             async function handleUrlLoad() {
@@ -170,8 +297,8 @@
 
                 setLoadingState(true);
                 hierarchy.clear(); // Clear previous hierarchy
+                psCandidateData.clear(); // Clear previous candidate data
                 headerMap = {}; // Clear previous headers
-
 
                 try {
                     console.log("Fetching URL with cache: 'no-store'");
@@ -209,7 +336,7 @@
                         throw new Error(`Required columns not found: ${missingKeys.join(', ')}`);
                     }
 
-                    // Process data into hierarchy
+                    // Process data into hierarchy AND extract candidate data
                     processData();
 
                     // Populate the first dropdown
@@ -219,8 +346,7 @@
                 } catch (error) {
                      console.error("Loading error:", error);
                      statusLabel.textContent = `Error: ${error.message}`;
-                     alert(`Loading Error:
-${error.message}`);
+                     alert(`Loading Error:\n${error.message}`);
                      resetAllDropdowns(); // Reset on error
                 } finally {
                     setLoadingState(false);
@@ -229,16 +355,19 @@ ${error.message}`);
 
              function processData() {
                  hierarchy.clear(); // Ensure it's empty before processing
+                 psCandidateData.clear(); // Clear candidate data map too
+
+                 const processedPsNames = new Set(); // To handle potential duplicates if hierarchy levels are identical but candidates differ
 
                  rawData.forEach(row => {
-                     // Get both No. and Name, format them
+                     // Get hierarchy keys
                      const zpcName = formatNoName(row[headerMap[ZPC_NO_KEY]], row[headerMap[ZPC_KEY]]);
                      const apName = formatNoName(row[headerMap[AP_NO_KEY]], row[headerMap[AP_KEY]]);
                      const gpName = formatNoName(row[headerMap[GP_NO_KEY]], row[headerMap[GP_KEY]]);
                      const wardName = formatNoName(row[headerMap[WARD_NO_KEY]], row[headerMap[WARD_KEY]]);
                      const psName = formatNoName(row[headerMap[PS_NO_KEY]], row[headerMap[PS_KEY]]);
 
-                     // Only add if all levels have names (can adjust this rule if needed)
+                     // Build Hierarchy (only if all levels have names)
                      if (zpcName && apName && gpName && wardName && psName) {
                          if (!hierarchy.has(zpcName)) hierarchy.set(zpcName, new Map());
                          const zpcMap = hierarchy.get(zpcName);
@@ -253,13 +382,29 @@ ${error.message}`);
                          const wardSet = gpMap.get(wardName);
 
                          wardSet.add(psName);
+
+                         // Store Candidate Data (using the formatted psName as the key)
+                         // Only store the first occurrence if duplicate PS names exist within the hierarchy
+                         if (!processedPsNames.has(psName)) {
+                             const candidates = {
+                                 zpc: getCandidateNamesJS(row, ZPC_CANDIDATE_PREFIX),
+                                 ap: getCandidateNamesJS(row, AP_CANDIDATE_PREFIX),
+                                 ward: getCandidateNamesJS(row, WARD_CANDIDATE_PREFIX)
+                             };
+                             psCandidateData.set(psName, candidates);
+                             processedPsNames.add(psName);
+                              // console.log(`Stored candidates for PS: ${psName}`, candidates);
+                         }
                      } else {
                         // Optionally log skipped rows
-                         // console.warn("Skipping row due to missing name(s):", row);
+                         // console.warn("Skipping row due to missing hierarchy name(s):", row);
                      }
                  });
                  console.log("Hierarchy built:", hierarchy); // For debugging
+                 console.log("Candidate data mapped:", psCandidateData); // For debugging
              }
+
+            // --- Dropdown Population and Handling ---
 
             function populateZpcDropdown() {
                 const zpcNames = Array.from(hierarchy.keys());
@@ -267,7 +412,7 @@ ${error.message}`);
                 resetDropdown(apSelect, 'Select AP');
                 resetDropdown(gpSelect, 'Select GP');
                 resetDropdown(wardSelect, 'Select Ward');
-                resetDropdown(psSelect, 'Select PS');
+                resetDropdown(psSelect, 'Select PS'); // This calls clearAndHideCandidates implicitly
             }
 
             function handleZpcChange() {
@@ -275,7 +420,7 @@ ${error.message}`);
                 resetDropdown(apSelect, 'Select AP');
                 resetDropdown(gpSelect, 'Select GP');
                 resetDropdown(wardSelect, 'Select Ward');
-                resetDropdown(psSelect, 'Select PS');
+                resetDropdown(psSelect, 'Select PS'); // Clears subsequent dropdowns and candidates
 
                 if (selectedZpc && hierarchy.has(selectedZpc)) {
                     const apMap = hierarchy.get(selectedZpc);
@@ -289,7 +434,7 @@ ${error.message}`);
                  const selectedAp = apSelect.value;
                  resetDropdown(gpSelect, 'Select GP');
                  resetDropdown(wardSelect, 'Select Ward');
-                 resetDropdown(psSelect, 'Select PS');
+                 resetDropdown(psSelect, 'Select PS'); // Clears subsequent dropdowns and candidates
 
                  if (selectedZpc && selectedAp && hierarchy.has(selectedZpc) && hierarchy.get(selectedZpc).has(selectedAp)) {
                      const gpMap = hierarchy.get(selectedZpc).get(selectedAp);
@@ -303,7 +448,7 @@ ${error.message}`);
                  const selectedAp = apSelect.value;
                  const selectedGp = gpSelect.value;
                  resetDropdown(wardSelect, 'Select Ward');
-                 resetDropdown(psSelect, 'Select PS');
+                 resetDropdown(psSelect, 'Select PS'); // Clears subsequent dropdowns and candidates
 
                   if (selectedZpc && selectedAp && selectedGp &&
                       hierarchy.has(selectedZpc) &&
@@ -320,7 +465,7 @@ ${error.message}`);
                  const selectedAp = apSelect.value;
                  const selectedGp = gpSelect.value;
                  const selectedWard = wardSelect.value;
-                 resetDropdown(psSelect, 'Select PS');
+                 resetDropdown(psSelect, 'Select PS'); // Clears subsequent dropdowns and candidates
 
                  if (selectedZpc && selectedAp && selectedGp && selectedWard &&
                      hierarchy.has(selectedZpc) &&
@@ -333,26 +478,58 @@ ${error.message}`);
                  }
              }
 
+             // --- Candidate Display Logic ---
+
+             function handlePsSelectChange() {
+                 const selectedPs = psSelect.value;
+                 if (selectedPs && psCandidateData.has(selectedPs)) {
+                     const candidates = psCandidateData.get(selectedPs);
+                     displayCandidates(candidates);
+                 } else {
+                     clearAndHideCandidates();
+                 }
+             }
+
+             function displayCandidates(candidates) {
+                 if (!candidates) {
+                    clearAndHideCandidates();
+                    return;
+                 }
+                 // Helper to populate a single list
+                 const populateList = (listElement, candidateArray) => {
+                     listElement.innerHTML = ''; // Clear previous items
+                     if (candidateArray && candidateArray.length > 0) {
+                         candidateArray.forEach(name => {
+                             const li = document.createElement('li');
+                             li.textContent = name;
+                             listElement.appendChild(li);
+                         });
+                     } else {
+                         const li = document.createElement('li');
+                         li.textContent = 'Uncontested or Nil';
+                         li.classList.add('uncontested');
+                         listElement.appendChild(li);
+                     }
+                 };
+
+                 populateList(zpcCandidateList, candidates.zpc);
+                 populateList(apCandidateList, candidates.ap);
+                 populateList(wardCandidateList, candidates.ward);
+
+                 candidateDisplayDiv.classList.remove('hidden'); // Show the display area
+             }
+
+             function clearAndHideCandidates() {
+                 zpcCandidateList.innerHTML = '';
+                 apCandidateList.innerHTML = '';
+                 wardCandidateList.innerHTML = '';
+                 candidateDisplayDiv.classList.add('hidden'); // Hide the display area
+             }
+
             // --- Initial State ---
-            resetAllDropdowns();
-
-            // Helper to format No - Name, handling missing parts
-            function formatNoName(no, name) {
-                const numStr = String(no || '').trim();
-                const nameStr = String(name || '').trim();
-
-                if (numStr && nameStr) {
-                    return `${numStr} - ${nameStr}`;
-                } else if (nameStr) {
-                    return nameStr; // Fallback to just name if no is missing
-                } else if (numStr) {
-                    return numStr; // Fallback to just no if name is missing
-                } else {
-                    return ''; // Should not happen if validation works, but safe fallback
-                }
-            }
+            resetAllDropdowns(); // Includes clearing/hiding candidates
 
         }); // End DOMContentLoaded
     </script>
 </body>
-</html> 
+</html>
