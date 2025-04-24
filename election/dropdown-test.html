@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hierarchical PS Selector Test</title>
+    <!-- Include SheetJS library -->
+    <script lang="javascript" src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background-color: #f4f4f4; }
+        .container { background: #fff; padding: 20px; border-radius: 8px; max-width: 800px; margin: auto; }
+        .loader { margin-bottom: 20px; display: flex; gap: 10px; align-items: center; }
+        #googleSheetUrl { flex-grow: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+        .button { padding: 8px 15px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        .button:disabled { background-color: #ccc; cursor: not-allowed; }
+        .button:hover:not(:disabled) { background-color: #0056b3; }
+        .dropdown-container { display: flex; flex-direction: column; gap: 15px; margin-top: 20px; }
+        label { margin-bottom: 5px; font-weight: bold; }
+        select { padding: 8px; border-radius: 4px; border: 1px solid #ccc; width: 100%; }
+        select:disabled { background-color: #e9ecef; }
+        #status { margin-top: 15px; font-style: italic; color: #555; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Polling Station Selector</h1>
+
+        <div class="loader">
+            <input type="text" id="googleSheetUrl" placeholder="Paste Google Sheet 'Publish to web' CSV Link...">
+            <button id="loadFromUrlButton" class="button">Load Data</button>
+        </div>
+        <div id="status">Enter a Google Sheet URL and click 'Load Data'.</div>
+
+        <div class="dropdown-container">
+            <div>
+                <label for="zpcSelect">ZPC Name:</label>
+                <select id="zpcSelect" disabled>
+                    <option value="">-- Select ZPC --</option>
+                </select>
+            </div>
+            <div>
+                <label for="apSelect">AP Name:</label>
+                <select id="apSelect" disabled>
+                    <option value="">-- Select AP --</option>
+                </select>
+            </div>
+            <div>
+                <label for="gpSelect">GP Name:</label>
+                <select id="gpSelect" disabled>
+                    <option value="">-- Select GP --</option>
+                </select>
+            </div>
+            <div>
+                <label for="wardSelect">Ward Name:</label>
+                <select id="wardSelect" disabled>
+                    <option value="">-- Select Ward --</option>
+                </select>
+            </div>
+            <div>
+                <label for="psSelect">PS Name:</label>
+                <select id="psSelect" disabled>
+                    <option value="">-- Select PS --</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- DOM Elements ---
+            const urlInput = document.getElementById('googleSheetUrl');
+            const loadButton = document.getElementById('loadFromUrlButton');
+            const statusLabel = document.getElementById('status');
+            const zpcSelect = document.getElementById('zpcSelect');
+            const apSelect = document.getElementById('apSelect');
+            const gpSelect = document.getElementById('gpSelect');
+            const wardSelect = document.getElementById('wardSelect');
+            const psSelect = document.getElementById('psSelect');
+
+            // --- Global State ---
+            let rawData = [];
+            let hierarchy = new Map(); // Map<zpc, Map<ap, Map<gp, Map<ward, Set<ps>>>>>
+            let headerMap = {}; // To store actual header names found
+
+            // --- Constants ---
+            const ZPC_KEY = 'zpc name';
+            const AP_KEY = 'ap name';
+            const GP_KEY = 'gp name';
+            const WARD_KEY = 'ward name';
+            const PS_KEY = 'ps name';
+            // Add keys for the number columns
+            const ZPC_NO_KEY = 'zpc no.';
+            const AP_NO_KEY = 'ap no.';
+            const GP_NO_KEY = 'gp no.';
+            const WARD_NO_KEY = 'ward no.';
+            const PS_NO_KEY = 'ps no.';
+
+            const REQ_KEYS = [
+                ZPC_KEY, AP_KEY, GP_KEY, WARD_KEY, PS_KEY,
+                ZPC_NO_KEY, AP_NO_KEY, GP_NO_KEY, WARD_NO_KEY, PS_NO_KEY
+            ];
+
+            // --- Event Listeners ---
+            loadButton.addEventListener('click', handleUrlLoad);
+            zpcSelect.addEventListener('change', handleZpcChange);
+            apSelect.addEventListener('change', handleApChange);
+            gpSelect.addEventListener('change', handleGpChange);
+            wardSelect.addEventListener('change', handleWardChange);
+
+            // --- Utility Functions ---
+            function findHeaderKey(headers, targetKey) {
+                const lowerTarget = targetKey.toLowerCase().trim();
+                for (const header of headers) {
+                    if (String(header).toLowerCase().trim() === lowerTarget) {
+                        return header; // Return the exact header name found
+                    }
+                }
+                return null; // Not found
+            }
+
+            function populateDropdown(selectElement, options, placeholder) {
+                selectElement.innerHTML = `<option value="">-- ${placeholder} --</option>`; // Clear existing options
+                options.sort((a, b) => a.localeCompare(b)); // Sort options alphabetically
+                options.forEach(option => {
+                    const opt = document.createElement('option');
+                    opt.value = option;
+                    opt.textContent = option;
+                    selectElement.appendChild(opt);
+                });
+                selectElement.disabled = false;
+            }
+
+            function resetDropdown(selectElement, placeholder) {
+                 selectElement.innerHTML = `<option value="">-- ${placeholder} --</option>`;
+                 selectElement.disabled = true;
+                 selectElement.value = ""; // Reset selection
+            }
+
+            function resetAllDropdowns() {
+                resetDropdown(zpcSelect, 'Select ZPC');
+                resetDropdown(apSelect, 'Select AP');
+                resetDropdown(gpSelect, 'Select GP');
+                resetDropdown(wardSelect, 'Select Ward');
+                resetDropdown(psSelect, 'Select PS');
+            }
+
+             function setLoadingState(loading) {
+                loadButton.disabled = loading;
+                urlInput.disabled = loading;
+                if (loading) {
+                    statusLabel.textContent = 'Loading data...';
+                    resetAllDropdowns(); // Disable dropdowns while loading
+                } else {
+                    // Status will be updated on success/error
+                }
+             }
+
+
+            // --- Core Logic Functions ---
+            async function handleUrlLoad() {
+                const url = urlInput.value.trim();
+                if (!url) {
+                    alert("Please paste a Google Sheet 'Publish to web' CSV URL first.");
+                    return;
+                }
+                 if (!url.includes('/pub?') || !url.includes('output=csv')) {
+                     console.warn("URL format might be incorrect. Expected a Google Sheet 'Publish to web' CSV link. Attempting to load anyway...");
+                 }
+
+                setLoadingState(true);
+                hierarchy.clear(); // Clear previous hierarchy
+                headerMap = {}; // Clear previous headers
+
+
+                try {
+                    console.log("Fetching URL with cache: 'no-store'");
+                    const response = await fetch(url, { cache: 'no-store' });
+
+                    if (!response.ok) {
+                        throw new Error(`Failed to fetch. Status: ${response.status} ${response.statusText}. Check URL & permissions.`);
+                    }
+                    const csvText = await response.text();
+                    if (!csvText) {
+                         throw new Error("Fetched data is empty.");
+                    }
+
+                    // Parse CSV using SheetJS
+                    const workbook = XLSX.read(csvText, { type: 'string', raw: true });
+                    const sheetName = workbook.SheetNames[0];
+                    if (!sheetName) throw new Error("Could not parse CSV data.");
+                    rawData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: null }); // Use null for empty values
+                     if (!rawData.length) throw new Error("CSV data is empty after parsing.");
+
+                    // Find actual header keys (case-insensitive)
+                    const headers = Object.keys(rawData[0] || {});
+                    let missingKeys = [];
+                    headerMap = {}; // Reset header map before finding new ones
+                    REQ_KEYS.forEach(key => {
+                        const foundKey = findHeaderKey(headers, key);
+                        if (foundKey) {
+                            headerMap[key] = foundKey;
+                        } else {
+                            missingKeys.push(key.toUpperCase());
+                        }
+                    });
+
+                    if (missingKeys.length > 0) {
+                        throw new Error(`Required columns not found: ${missingKeys.join(', ')}`);
+                    }
+
+                    // Process data into hierarchy
+                    processData();
+
+                    // Populate the first dropdown
+                    populateZpcDropdown();
+                    statusLabel.textContent = `Loaded ${rawData.length} rows. Select ZPC to begin.`;
+
+                } catch (error) {
+                     console.error("Loading error:", error);
+                     statusLabel.textContent = `Error: ${error.message}`;
+                     alert(`Loading Error:
+${error.message}`);
+                     resetAllDropdowns(); // Reset on error
+                } finally {
+                    setLoadingState(false);
+                }
+            }
+
+             function processData() {
+                 hierarchy.clear(); // Ensure it's empty before processing
+
+                 rawData.forEach(row => {
+                     // Get both No. and Name, format them
+                     const zpcName = formatNoName(row[headerMap[ZPC_NO_KEY]], row[headerMap[ZPC_KEY]]);
+                     const apName = formatNoName(row[headerMap[AP_NO_KEY]], row[headerMap[AP_KEY]]);
+                     const gpName = formatNoName(row[headerMap[GP_NO_KEY]], row[headerMap[GP_KEY]]);
+                     const wardName = formatNoName(row[headerMap[WARD_NO_KEY]], row[headerMap[WARD_KEY]]);
+                     const psName = formatNoName(row[headerMap[PS_NO_KEY]], row[headerMap[PS_KEY]]);
+
+                     // Only add if all levels have names (can adjust this rule if needed)
+                     if (zpcName && apName && gpName && wardName && psName) {
+                         if (!hierarchy.has(zpcName)) hierarchy.set(zpcName, new Map());
+                         const zpcMap = hierarchy.get(zpcName);
+
+                         if (!zpcMap.has(apName)) zpcMap.set(apName, new Map());
+                         const apMap = zpcMap.get(apName);
+
+                         if (!apMap.has(gpName)) apMap.set(gpName, new Map());
+                         const gpMap = apMap.get(gpName);
+
+                         if (!gpMap.has(wardName)) gpMap.set(wardName, new Set());
+                         const wardSet = gpMap.get(wardName);
+
+                         wardSet.add(psName);
+                     } else {
+                        // Optionally log skipped rows
+                         // console.warn("Skipping row due to missing name(s):", row);
+                     }
+                 });
+                 console.log("Hierarchy built:", hierarchy); // For debugging
+             }
+
+            function populateZpcDropdown() {
+                const zpcNames = Array.from(hierarchy.keys());
+                populateDropdown(zpcSelect, zpcNames, 'Select ZPC');
+                resetDropdown(apSelect, 'Select AP');
+                resetDropdown(gpSelect, 'Select GP');
+                resetDropdown(wardSelect, 'Select Ward');
+                resetDropdown(psSelect, 'Select PS');
+            }
+
+            function handleZpcChange() {
+                const selectedZpc = zpcSelect.value;
+                resetDropdown(apSelect, 'Select AP');
+                resetDropdown(gpSelect, 'Select GP');
+                resetDropdown(wardSelect, 'Select Ward');
+                resetDropdown(psSelect, 'Select PS');
+
+                if (selectedZpc && hierarchy.has(selectedZpc)) {
+                    const apMap = hierarchy.get(selectedZpc);
+                    const apNames = Array.from(apMap.keys());
+                    populateDropdown(apSelect, apNames, 'Select AP');
+                }
+            }
+
+             function handleApChange() {
+                 const selectedZpc = zpcSelect.value;
+                 const selectedAp = apSelect.value;
+                 resetDropdown(gpSelect, 'Select GP');
+                 resetDropdown(wardSelect, 'Select Ward');
+                 resetDropdown(psSelect, 'Select PS');
+
+                 if (selectedZpc && selectedAp && hierarchy.has(selectedZpc) && hierarchy.get(selectedZpc).has(selectedAp)) {
+                     const gpMap = hierarchy.get(selectedZpc).get(selectedAp);
+                     const gpNames = Array.from(gpMap.keys());
+                     populateDropdown(gpSelect, gpNames, 'Select GP');
+                 }
+             }
+
+              function handleGpChange() {
+                 const selectedZpc = zpcSelect.value;
+                 const selectedAp = apSelect.value;
+                 const selectedGp = gpSelect.value;
+                 resetDropdown(wardSelect, 'Select Ward');
+                 resetDropdown(psSelect, 'Select PS');
+
+                  if (selectedZpc && selectedAp && selectedGp &&
+                      hierarchy.has(selectedZpc) &&
+                      hierarchy.get(selectedZpc).has(selectedAp) &&
+                      hierarchy.get(selectedZpc).get(selectedAp).has(selectedGp)) {
+                     const wardMap = hierarchy.get(selectedZpc).get(selectedAp).get(selectedGp);
+                     const wardNames = Array.from(wardMap.keys());
+                     populateDropdown(wardSelect, wardNames, 'Select Ward');
+                 }
+             }
+
+             function handleWardChange() {
+                 const selectedZpc = zpcSelect.value;
+                 const selectedAp = apSelect.value;
+                 const selectedGp = gpSelect.value;
+                 const selectedWard = wardSelect.value;
+                 resetDropdown(psSelect, 'Select PS');
+
+                 if (selectedZpc && selectedAp && selectedGp && selectedWard &&
+                     hierarchy.has(selectedZpc) &&
+                     hierarchy.get(selectedZpc).has(selectedAp) &&
+                     hierarchy.get(selectedZpc).get(selectedAp).has(selectedGp) &&
+                     hierarchy.get(selectedZpc).get(selectedAp).get(selectedGp).has(selectedWard)) {
+                    const psSet = hierarchy.get(selectedZpc).get(selectedAp).get(selectedGp).get(selectedWard);
+                    const psNames = Array.from(psSet);
+                    populateDropdown(psSelect, psNames, 'Select PS');
+                 }
+             }
+
+            // --- Initial State ---
+            resetAllDropdowns();
+
+            // Helper to format No - Name, handling missing parts
+            function formatNoName(no, name) {
+                const numStr = String(no || '').trim();
+                const nameStr = String(name || '').trim();
+
+                if (numStr && nameStr) {
+                    return `${numStr} - ${nameStr}`;
+                } else if (nameStr) {
+                    return nameStr; // Fallback to just name if no is missing
+                } else if (numStr) {
+                    return numStr; // Fallback to just no if name is missing
+                } else {
+                    return ''; // Should not happen if validation works, but safe fallback
+                }
+            }
+
+        }); // End DOMContentLoaded
+    </script>
+</body>
+</html> 
