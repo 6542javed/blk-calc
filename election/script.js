@@ -483,7 +483,7 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     function switchView() {
         //exit function (bypass)
-        // return;
+        return;
         
         if (currentView === 'ballot_count') {
             ballotCountView.classList.remove('active-view');
