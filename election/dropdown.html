@@ -72,17 +72,16 @@
 </head>
 <body>
     <div class="container">
-        <h1>Polling Station Selector</h1>
+        <div class="top-bar">
+            <h1>Polling Station Selector</h1>
+            <a href="/election/"><button class="button">Switch to Ballot View</button></a>
+        </div>
 
         <div class="loader">
             <input type="text" id="googleSheetUrl" placeholder="Paste Google Sheet 'Publish to web' CSV Link...">
             <button id="loadFromUrlButton" class="button">Load Data</button>
         </div>
         <div id="status">Enter a Google Sheet URL and click 'Load Data'.</div>
-
-        <div class="status-switch-container" style="float: left;">
-            <a href="/election/"><button class="button">Switch to Ballot View</button></a>
-        </div>
 
         <div class="dropdown-container">
             <div>
