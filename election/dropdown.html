@@ -9,9 +9,9 @@
     <style>
         body { font-family: sans-serif; padding: 20px; background-color: #f4f4f4; }
         .container { background: #fff; padding: 20px; border-radius: 8px; max-width: 800px; margin: auto; }
-        .loader { margin-bottom: 20px; display: flex; gap: 10px; align-items: center; }
-        #googleSheetUrl { flex-grow: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
-        .button { padding: 8px 15px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        .loader { margin-bottom: 20px; display: flex; flex-wrap: wrap; /* Allow wrapping */ gap: 10px; align-items: center; }
+        #googleSheetUrl { flex-grow: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px; min-width: 250px; /* Prevent input getting too small */ }
+        .button { padding: 8px 15px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; white-space: nowrap; /* Prevent button text wrap */ }
         .button:disabled { background-color: #ccc; cursor: not-allowed; }
         .button:hover:not(:disabled) { background-color: #0056b3; }
         .dropdown-container { display: flex; flex-direction: column; gap: 15px; margin-top: 20px; }
@@ -41,10 +41,12 @@
             display: flex;
             gap: 20px;
             justify-content: space-around; /* Distribute columns */
+            flex-wrap: wrap; /* Allow wrapping on smaller screens */
         }
         .candidate-column {
             flex: 1; /* Allow columns to grow equally */
             min-width: 150px; /* Prevent columns from becoming too narrow */
+            margin-bottom: 15px; /* Add space when columns wrap */
         }
         .candidate-column h3 {
             margin-top: 0;
@@ -74,10 +76,12 @@
             justify-content: space-between;
             align-items: center;
             margin-bottom: 50px;
+            flex-wrap: wrap; /* Allow wrapping on smaller screens */
         }
 
         .top-bar h1 {
             margin: 0;
+            margin-bottom: 10px; /* Add space when wrapping */
         }
 
         .top-bar a .button {
@@ -90,6 +94,10 @@
                 padding: 0px;
                 margin: 0px;
             }
+            .loader { flex-direction: column; align-items: stretch; } /* Stack loader items */
+             #googleSheetUrl { width: calc(100% - 18px); } /* Adjust width considering padding/border */
+            .button { width: 100%; } /* Make buttons full width */
+            .top-bar { justify-content: center; text-align: center; }
         }
     </style>
 </head>
@@ -102,9 +110,11 @@
 
         <div class="loader">
             <input type="text" id="googleSheetUrl" placeholder="Paste Google Sheet 'Publish to web' CSV Link...">
-            <button id="loadFromUrlButton" class="button">Load Data</button>
+            <button id="loadFromUrlButton" class="button">Load from URL</button>
+            <button id="loadLocalCsvButton" class="button">Load Local CSV</button> <!-- Added Button -->
         </div>
-        <div id="status">Enter a Google Sheet URL and click 'Load Data'.</div>
+        <!-- Updated Status Message -->
+        <div id="status">Enter a Google Sheet URL and click 'Load from URL', or click 'Load Local CSV' to load '24 april data.csv'.</div>
 
         <div class="dropdown-container">
             <div>
@@ -165,7 +175,8 @@
         document.addEventListener('DOMContentLoaded', () => {
             // --- DOM Elements ---
             const urlInput = document.getElementById('googleSheetUrl');
-            const loadButton = document.getElementById('loadFromUrlButton');
+            const loadUrlButton = document.getElementById('loadFromUrlButton');
+            const loadLocalButton = document.getElementById('loadLocalCsvButton'); // New button element
             const statusLabel = document.getElementById('status');
             const zpcSelect = document.getElementById('zpcSelect');
             const apSelect = document.getElementById('apSelect');
@@ -186,6 +197,7 @@
             let headerMap = {}; // To store actual header names found
 
             // --- Constants ---
+            const LOCAL_CSV_FILENAME = '24 april data.csv'; // Define local filename
             const ZPC_KEY = 'zpc name';
             const AP_KEY = 'ap name';
             const GP_KEY = 'gp name';
@@ -209,7 +221,8 @@
             // but are required for the candidate display feature. Add checks if needed.
 
             // --- Event Listeners ---
-            loadButton.addEventListener('click', handleUrlLoad);
+            loadUrlButton.addEventListener('click', handleUrlLoad);
+            loadLocalButton.addEventListener('click', handleLocalCsvLoad); // Listener for the new button
             zpcSelect.addEventListener('change', handleZpcChange);
             apSelect.addEventListener('change', handleApChange);
             gpSelect.addEventListener('change', handleGpChange);
@@ -255,36 +268,32 @@
             }
 
              function setLoadingState(loading) {
-                loadButton.disabled = loading;
+                // Disable/enable both buttons and the input
+                loadUrlButton.disabled = loading;
+                loadLocalButton.disabled = loading;
                 urlInput.disabled = loading;
                 if (loading) {
                     statusLabel.textContent = 'Loading data...';
                     resetAllDropdowns(); // Disable dropdowns and clear candidates while loading
                 } else {
-                    // Status will be updated on success/error
+                    // Status will be updated on success/error by the calling function
                 }
              }
 
             // --- Candidate Helper Functions ---
-            // Copied from script.js
+            // Copied from script.js - No changes needed here
             function getCandidateNamesJS(row, prefix) {
                 const candidates = [];
                 if (!row) return candidates;
-                // Find actual header keys that *start with* the prefix (case-insensitive)
                 const matchingHeaders = Object.keys(row).filter(key =>
                     typeof key === 'string' && key.trim().toLowerCase().startsWith(prefix.toLowerCase())
                 );
-
-                // Sort matching headers to maintain a consistent order if needed (e.g., ZPM1, ZPM2)
-                // This simple sort works if headers are like 'ZPM1', 'ZPM10', 'ZPM2'
-                // A more robust natural sort might be needed for complex cases.
-                matchingHeaders.sort();
+                matchingHeaders.sort(); // Simple sort
 
                 for (const key of matchingHeaders) {
                     let value = row[key];
                     if (value !== null && value !== undefined) {
                         const strValue = String(value).trim();
-                        // Consider 'nil', 'NIL', 'Nil', etc. as non-candidates
                         if (strValue && strValue.toLowerCase() !== 'nil') {
                             candidates.push(strValue);
                         }
@@ -293,24 +302,64 @@
                 return candidates;
             }
 
-            // Helper to format No - Name, handling missing parts
+            // Helper to format No - Name, handling missing parts - No changes needed here
             function formatNoName(no, name) {
                 const numStr = String(no || '').trim();
                 const nameStr = String(name || '').trim();
 
                 if (numStr && nameStr) {
-                    // Standardize the separator
                     return `${numStr} - ${nameStr}`;
                 } else if (nameStr) {
-                    return nameStr; // Fallback to just name if no is missing
+                    return nameStr;
                 } else if (numStr) {
-                    return numStr; // Fallback to just no if name is missing
+                    return numStr;
                 } else {
-                    return ''; // Should not happen if validation works, but safe fallback
+                    return '';
                 }
             }
 
             // --- Core Logic Functions ---
+
+            // Generic function to process fetched CSV text
+            function processCsvData(csvText, sourceDescription) {
+                if (!csvText) {
+                     throw new Error(`Fetched data (${sourceDescription}) is empty.`);
+                }
+
+                // Parse CSV using SheetJS
+                const workbook = XLSX.read(csvText, { type: 'string', raw: true });
+                const sheetName = workbook.SheetNames[0];
+                if (!sheetName) throw new Error(`Could not parse CSV data (${sourceDescription}).`);
+
+                rawData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: null }); // Use null for empty values
+                 if (!rawData.length) throw new Error(`CSV data is empty after parsing (${sourceDescription}).`);
+
+                // Find actual header keys (case-insensitive)
+                const headers = Object.keys(rawData[0] || {});
+                let missingKeys = [];
+                headerMap = {}; // Reset header map before finding new ones
+                REQ_KEYS.forEach(key => {
+                    const foundKey = findHeaderKey(headers, key);
+                    if (foundKey) {
+                        headerMap[key] = foundKey;
+                    } else {
+                        missingKeys.push(key.toUpperCase());
+                    }
+                });
+
+                if (missingKeys.length > 0) {
+                    throw new Error(`Required columns not found in ${sourceDescription}: ${missingKeys.join(', ')}`);
+                }
+
+                // Process data into hierarchy AND extract candidate data
+                processData(); // Re-uses the existing processing logic
+
+                // Populate the first dropdown
+                populateZpcDropdown();
+                statusLabel.textContent = `Loaded ${rawData.length} rows from ${sourceDescription}. Select ZPC to begin.`;
+            }
+
+
             async function handleUrlLoad() {
                 const url = urlInput.value.trim();
                 if (!url) {
@@ -319,6 +368,8 @@
                 }
                  if (!url.includes('/pub?') || !url.includes('output=csv')) {
                      console.warn("URL format might be incorrect. Expected a Google Sheet 'Publish to web' CSV link. Attempting to load anyway...");
+                     // Optionally show a less severe warning to the user
+                     // statusLabel.textContent = "Warning: URL format might be incorrect. Trying to load...";
                  }
 
                 setLoadingState(true);
@@ -327,57 +378,61 @@
                 headerMap = {}; // Clear previous headers
 
                 try {
-                    console.log("Fetching URL with cache: 'no-store'");
-                    const response = await fetch(url, { cache: 'no-store' });
+                    console.log("Fetching URL:", url);
+                    const response = await fetch(url, { cache: 'no-store' }); // Use no-store to prevent caching issues
 
                     if (!response.ok) {
-                        throw new Error(`Failed to fetch. Status: ${response.status} ${response.statusText}. Check URL & permissions.`);
+                        throw new Error(`Failed to fetch URL. Status: ${response.status} ${response.statusText}. Check URL & permissions.`);
                     }
                     const csvText = await response.text();
-                    if (!csvText) {
-                         throw new Error("Fetched data is empty.");
-                    }
-
-                    // Parse CSV using SheetJS
-                    const workbook = XLSX.read(csvText, { type: 'string', raw: true });
-                    const sheetName = workbook.SheetNames[0];
-                    if (!sheetName) throw new Error("Could not parse CSV data.");
-                    rawData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: null }); // Use null for empty values
-                     if (!rawData.length) throw new Error("CSV data is empty after parsing.");
-
-                    // Find actual header keys (case-insensitive)
-                    const headers = Object.keys(rawData[0] || {});
-                    let missingKeys = [];
-                    headerMap = {}; // Reset header map before finding new ones
-                    REQ_KEYS.forEach(key => {
-                        const foundKey = findHeaderKey(headers, key);
-                        if (foundKey) {
-                            headerMap[key] = foundKey;
-                        } else {
-                            missingKeys.push(key.toUpperCase());
-                        }
-                    });
-
-                    if (missingKeys.length > 0) {
-                        throw new Error(`Required columns not found: ${missingKeys.join(', ')}`);
-                    }
-
-                    // Process data into hierarchy AND extract candidate data
-                    processData();
-
-                    // Populate the first dropdown
-                    populateZpcDropdown();
-                    statusLabel.textContent = `Loaded ${rawData.length} rows. Select ZPC to begin.`;
+                    processCsvData(csvText, "Google Sheet URL"); // Use the generic processor
 
                 } catch (error) {
-                     console.error("Loading error:", error);
+                     console.error("URL Loading error:", error);
                      statusLabel.textContent = `Error: ${error.message}`;
-                     alert(`Loading Error:\n${error.message}`);
+                     alert(`URL Loading Error:\n${error.message}`);
                      resetAllDropdowns(); // Reset on error
                 } finally {
                     setLoadingState(false);
                 }
             }
+
+            // New Handler for loading local CSV
+            async function handleLocalCsvLoad() {
+                setLoadingState(true);
+                hierarchy.clear(); // Clear previous data
+                psCandidateData.clear();
+                headerMap = {};
+
+                try {
+                    console.log("Fetching local file:", LOCAL_CSV_FILENAME);
+                    // Fetch the local file. IMPORTANT: This requires the HTML file to be served
+                    // by a web server (even a simple local one like Python's http.server or VS Code Live Server).
+                    // It will likely fail if you open the HTML directly from the filesystem (file:///).
+                    const response = await fetch(LOCAL_CSV_FILENAME, { cache: 'no-store' });
+
+                    if (!response.ok) {
+                        // Provide a more helpful error message for common local file issues
+                        if (response.status === 404) {
+                             throw new Error(`Failed to fetch local file '${LOCAL_CSV_FILENAME}'. Status: ${response.status} ${response.statusText}. Make sure the file exists in the same directory as the HTML file and that you are running this page from a web server (not file:/// protocol).`);
+                        } else {
+                            throw new Error(`Failed to fetch local file '${LOCAL_CSV_FILENAME}'. Status: ${response.status} ${response.statusText}.`);
+                        }
+                    }
+                    const csvText = await response.text();
+                    processCsvData(csvText, `local file '${LOCAL_CSV_FILENAME}'`); // Use the generic processor
+
+                } catch (error) {
+                     console.error("Local CSV Loading error:", error);
+                     statusLabel.textContent = `Error: ${error.message}`;
+                     // Use alert for more prominent error display, especially for local file issues
+                     alert(`Local CSV Loading Error:\n${error.message}`);
+                     resetAllDropdowns(); // Reset on error
+                } finally {
+                    setLoadingState(false);
+                }
+            }
+
 
              function processData() {
                  hierarchy.clear(); // Ensure it's empty before processing
@@ -385,8 +440,13 @@
 
                  const processedPsNames = new Set(); // To handle potential duplicates if hierarchy levels are identical but candidates differ
 
-                 rawData.forEach(row => {
-                     // Get hierarchy keys
+                 rawData.forEach((row, index) => { // Added index for logging
+                     // Check if row is an object, skip if not (e.g., empty rows parsed weirdly)
+                     if (typeof row !== 'object' || row === null) {
+                         // console.warn(`Skipping invalid row data at index ${index}:`, row);
+                         return;
+                     }
+                     // Get hierarchy keys using the mapped header names
                      const zpcName = formatNoName(row[headerMap[ZPC_NO_KEY]], row[headerMap[ZPC_KEY]]);
                      const apName = formatNoName(row[headerMap[AP_NO_KEY]], row[headerMap[AP_KEY]]);
                      const gpName = formatNoName(row[headerMap[GP_NO_KEY]], row[headerMap[GP_KEY]]);
@@ -410,7 +470,8 @@
                          wardSet.add(psName);
 
                          // Store Candidate Data (using the formatted psName as the key)
-                         // Only store the first occurrence if duplicate PS names exist within the hierarchy
+                         // Only store the first occurrence for a given PS name to avoid overwriting
+                         // if the same PS name appears multiple times (e.g., due to data entry issues)
                          if (!processedPsNames.has(psName)) {
                              const candidates = {
                                  zpc: getCandidateNamesJS(row, ZPC_CANDIDATE_PREFIX),
@@ -419,18 +480,23 @@
                              };
                              psCandidateData.set(psName, candidates);
                              processedPsNames.add(psName);
-                              // console.log(`Stored candidates for PS: ${psName}`, candidates);
+                             // console.log(`Stored candidates for PS: ${psName}`, candidates); // Uncomment for debugging
                          }
                      } else {
                         // Optionally log skipped rows
-                         // console.warn("Skipping row due to missing hierarchy name(s):", row);
+                         // console.warn(`Skipping row at index ${index} due to missing hierarchy name(s):`, {zpcName, apName, gpName, wardName, psName}, "Raw Row:", row);
                      }
                  });
-                 console.log("Hierarchy built:", hierarchy); // For debugging
-                 console.log("Candidate data mapped:", psCandidateData); // For debugging
+                 // console.log("Hierarchy built:", hierarchy); // For debugging
+                 // console.log("Candidate data mapped:", psCandidateData); // For debugging
+                 if (hierarchy.size === 0) {
+                     console.warn("Hierarchy map is empty after processing. Check data format and required columns.");
+                     statusLabel.textContent += " Warning: No valid hierarchy data found. Check CSV format/content.";
+                 }
              }
 
             // --- Dropdown Population and Handling ---
+            // No changes needed in these handlers (handleZpcChange, handleApChange, etc.)
 
             function populateZpcDropdown() {
                 const zpcNames = Array.from(hierarchy.keys());
@@ -505,6 +571,7 @@
              }
 
              // --- Candidate Display Logic ---
+             // No changes needed here (handlePsSelectChange, displayCandidates, clearAndHideCandidates)
 
              function handlePsSelectChange() {
                  const selectedPs = psSelect.value;

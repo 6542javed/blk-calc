@@ -1,10 +1,10 @@
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => { // Make the listener async
     // --- Global State ---
     let rawData = [];
     let processedData = [];
     let psNames = [];
     let psNameToIndexMap = {};
-    let currentView = 'ballot_count'; // Default view
+    let currentView = 'ballot_count';
     let totalAllBallots = 0;
     let isLoading = false; // Flag to prevent concurrent loading
 
@@ -25,7 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const ballotTableBody = document.getElementById('ballotTableBody');
     const tooltipElement = document.getElementById('tooltip');
 
-    // Contestant Names UI Elements (Keep references even if view switching is disabled)
+    // Contestant Names UI Elements
     const contestantNamesView = document.getElementById('contestant-names-view');
     const psSearchInput = document.getElementById('psSearchInput');
     const psList = document.getElementById('psList');
@@ -33,7 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const apCandidateList = document.getElementById('apCandidateList');
     const wardCandidateList = document.getElementById('wardCandidateList');
 
-    // --- Utility Functions (Unchanged) ---
+    // --- Utility Functions (getCandidateNamesJS, safeParseInt - unchanged) ---
     function getCandidateNamesJS(row, prefix) {
         const candidates = [];
         if (!row) return candidates;
@@ -55,17 +55,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const num = Number(String(value).trim());
         return Number.isFinite(num) ? Math.floor(num) : 0;
     }
-    function findValueCaseInsensitive(obj, targetKey) {
-        if (!obj || typeof targetKey !== 'string') return undefined;
-        const lowerTargetKey = targetKey.toLowerCase();
-        for (const key in obj) {
-            if (Object.hasOwnProperty.call(obj, key) && String(key).toLowerCase() === lowerTargetKey) {
-                return obj[key];
-            }
-        }
-        return undefined;
-    }
-
 
     // --- Event Listeners ---
     fileInput.addEventListener('change', handleFileLoad);
@@ -103,8 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function endLoading() {
         isLoading = false;
         setControlsState(false); // Set controls state based on data presence *after* load
-        // Don't reset file input here, only after successful manual load
-        // fileInput.value = '';
+        fileInput.value = ''; // Reset file input value
     }
 
     /**
@@ -119,7 +107,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * Handles loading local Excel file.
+     * Handles loading local Excel file (selected via input).
      */
     function handleFileLoad(event) {
         const file = event.target.files[0];
@@ -133,21 +121,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 const workbook = XLSX.read(data, { type: 'array' });
                 const sheetName = workbook.SheetNames[0];
                 if (!sheetName) throw new Error("Excel file has no sheets.");
-                const rawSheetData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' }); // Renamed to avoid conflict
-                if (!rawSheetData.length) throw new Error(`Sheet '${sheetName}' is empty.`);
-                const headers = Object.keys(rawSheetData[0] || {});
+                rawData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
+                if (!rawData.length) throw new Error(`Sheet '${sheetName}' is empty.`);
+                const headers = Object.keys(rawData[0] || {});
                 const psNameHeader = headers.find(h => h.trim().toLowerCase() === 'ps name');
                 if (!psNameHeader) throw new Error("Required column 'PS Name' not found.");
 
-                // Assign to global rawData *after* validation
-                rawData = rawSheetData;
                 processRawData(rawData, psNameHeader);
                 updateAllUIs();
                 statusLabel.textContent = `Loaded ${processedData.length} unique PS from: ${file.name}`;
-                fileInput.value = ''; // Reset file input *after* successful load
             } catch (error) {
                 handleLoadingError(error, "Error processing Excel file");
-                 fileInput.value = ''; // Also reset on error
             } finally {
                 endLoading();
             }
@@ -156,7 +140,6 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error("FileReader error:", e);
             handleLoadingError(new Error("An error occurred while trying to read the file."), "File Read Error");
             endLoading(); // Ensure loading state is reset even on reader error
-             fileInput.value = ''; // Also reset on error
         };
         reader.readAsArrayBuffer(file);
     }
@@ -170,8 +153,9 @@ document.addEventListener('DOMContentLoaded', () => {
             alert("Please paste a Google Sheet 'Publish to web' CSV URL first.");
             return;
         }
+
         if (!url.includes('/pub?') || !url.includes('output=csv')) {
-             console.warn("URL format might be incorrect. Expected a Google Sheet 'Publish to web' CSV link. Attempting anyway...");
+             console.warn("URL format might be incorrect. Expected a Google Sheet 'Publish to web' CSV link (containing '/pub?' and 'output=csv'). Attempting to load anyway...");
         }
 
         if (!startLoading(`Loading from URL...`)) return;
@@ -181,25 +165,24 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch(url, { cache: 'no-store' });
 
             if (!response.ok) {
-                throw new Error(`Failed to fetch data. Status: ${response.status} ${response.statusText}. Ensure link is correct and published publicly.`);
+                throw new Error(`Failed to fetch data. Status: ${response.status} ${response.statusText}. Ensure the link is correct and published publicly.`);
             }
             const csvText = await response.text();
             if (!csvText) {
                  throw new Error("Fetched data is empty. Check the Google Sheet or link.");
             }
 
-            const workbook = XLSX.read(csvText, { type: 'string', raw: true }); // Let SheetJS detect CSV
+            // Use SheetJS to parse the CSV string
+            const workbook = XLSX.read(csvText, { type: 'string', raw: true });
             const sheetName = workbook.SheetNames[0];
             if (!sheetName) throw new Error("Could not parse CSV data.");
-            const rawSheetData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' }); // Renamed
-             if (!rawSheetData.length) throw new Error("CSV data is empty after parsing.");
+            rawData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
+             if (!rawData.length) throw new Error("CSV data is empty after parsing.");
 
-            const headers = Object.keys(rawSheetData[0] || {});
+            const headers = Object.keys(rawData[0] || {});
             const psNameHeader = headers.find(h => h.trim().toLowerCase() === 'ps name');
             if (!psNameHeader) throw new Error("Required column 'PS Name' not found in the CSV data.");
 
-            // Assign to global rawData *after* validation
-            rawData = rawSheetData;
             processRawData(rawData, psNameHeader);
             updateAllUIs();
             statusLabel.textContent = `Loaded ${processedData.length} unique PS from URL.`;
@@ -212,84 +195,68 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * Handles loading the default data.tsv file from the same directory.
-     * This is called automatically on page load.
+     * Handles loading the default local CSV file.
      */
-    async function loadDefaultTsv() {
-        const tsvFileName = '24 april data.tsv'; // Define the default filename
-        if (!startLoading(`Loading default data from ${tsvFileName}...`)) return;
+    async function loadDefaultCsv() {
+        const defaultFilename = '24 april data.csv';
+        if (!startLoading(`Loading default data (${defaultFilename})...`)) return;
 
         try {
-            console.log(`Fetching default file '${tsvFileName}' with cache: 'no-store'`);
-            // Fetch from the relative path (same directory as HTML/JS)
-            const response = await fetch(tsvFileName, { cache: 'no-store' });
+            // Fetch the local file (relative path)
+            console.log(`Fetching default file: ${defaultFilename}`);
+            const response = await fetch(defaultFilename, { cache: 'no-store' }); // Add cache control here too
 
             if (!response.ok) {
-                 // Provide a more specific error message if the file is not found
-                 if (response.status === 404) {
-                    throw new Error(`Default data file '${tsvFileName}' not found in the application directory. Please use the upload or URL options.`);
-                 } else {
-                    throw new Error(`Failed to fetch default data file '${tsvFileName}'. Status: ${response.status} ${response.statusText}.`);
-                 }
+                // File not found or other server error (less likely for local file)
+                if (response.status === 404) {
+                    throw new Error(`Default file '${defaultFilename}' not found in the same directory as the HTML file.`);
+                } else {
+                    throw new Error(`Failed to fetch default file. Status: ${response.status} ${response.statusText}`);
+                }
+            }
+            const csvText = await response.text();
+            if (!csvText) {
+                 throw new Error(`Default file '${defaultFilename}' is empty.`);
             }
 
-            const tsvText = await response.text();
-            if (!tsvText) {
-                 throw new Error(`Default data file '${tsvFileName}' is empty.`);
-            }
-
-            // Use SheetJS to parse the TSV string
-            // IMPORTANT: Specify the field separator (FS) as tab ('\t')
-            const workbook = XLSX.read(tsvText, { type: 'string', raw: true, FS: "\t" });
+            // Use SheetJS to parse the CSV string
+            const workbook = XLSX.read(csvText, { type: 'string', raw: true });
             const sheetName = workbook.SheetNames[0];
-            if (!sheetName) throw new Error(`Could not parse TSV data from '${tsvFileName}'.`);
-            const rawSheetData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' }); // Renamed
-             if (!rawSheetData.length) throw new Error(`TSV data in '${tsvFileName}' is empty after parsing.`);
+            if (!sheetName) throw new Error("Could not parse CSV data from default file.");
+            rawData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
+             if (!rawData.length) throw new Error("Default CSV data is empty after parsing.");
 
-            const headers = Object.keys(rawSheetData[0] || {});
+            const headers = Object.keys(rawData[0] || {});
             const psNameHeader = headers.find(h => h.trim().toLowerCase() === 'ps name');
-            if (!psNameHeader) throw new Error(`Required column 'PS Name' not found in the default data file '${tsvFileName}'.`);
+            if (!psNameHeader) throw new Error("Required column 'PS Name' not found in the default CSV data.");
 
-            // Assign to global rawData *after* validation
-            rawData = rawSheetData;
             processRawData(rawData, psNameHeader);
             updateAllUIs();
-            statusLabel.textContent = `Loaded ${processedData.length} unique PS from default file (${tsvFileName}).`;
+            statusLabel.textContent = `Loaded ${processedData.length} unique PS from default file: ${defaultFilename}.`;
+            console.log(`Successfully loaded default data from ${defaultFilename}.`);
 
         } catch (error) {
-            // For default load errors, keep controls enabled so user can try other methods
-            handleLoadingError(error, `Error loading default data (${tsvFileName})`, false); // Pass 'false' to keep controls enabled
+             // Use handleLoadingError, but provide a more specific context
+             handleLoadingError(error, `Error loading default file (${defaultFilename})`);
+             // Optionally, provide more user-friendly feedback if the default load fails
+             // e.g., statusLabel.textContent = `Could not load default data. Please load manually. Error: ${error.message}`;
+             // The current handleLoadingError already shows the error message.
+             console.warn("Default data load failed. User can load manually.");
         } finally {
-            endLoading(); // Ensure loading state is cleared and controls potentially re-enabled
+            endLoading(); // Always end loading state, regardless of success/failure
         }
     }
 
 
     /**
      * Centralized error handling for loading processes.
-     * @param {Error} error - The error object.
-     * @param {string} [contextMessage="Error"] - A message indicating the context of the error.
-     * @param {boolean} [fullReset=true] - Whether to fully reset the application state (clearing data). Default is true.
-     *                                      Set to false for default load errors to allow other load methods.
      */
-    function handleLoadingError(error, contextMessage = "Error", fullReset = true) {
+    function handleLoadingError(error, contextMessage = "Error") {
          console.error(`${contextMessage}:`, error);
-         const displayMessage = `Error: ${error.message}`;
-         statusLabel.textContent = displayMessage;
-         alert(`${contextMessage}:\n${error.message}`);
-
-         if (fullReset) {
-            resetApplicationState(false); // Reset state but keep the error message
-         } else {
-            // If not a full reset (e.g., default load failed), just clear the UI
-            // but leave controls enabled so user can try file/URL upload.
-            resetUIOnly();
-            ballotSummaryLabel.textContent = 'Load data to see totals.';
-            statusLabel.textContent = `${displayMessage} Use other load options.`; // Keep error but add context
-            // Ensure controls are enabled after the error for non-full resets
-            isLoading = false; // Explicitly set isLoading false here
-            setControlsState(false); // Enable controls
-         }
+         // Keep the status message more informative than just "No data loaded"
+         statusLabel.textContent = `${contextMessage}: ${error.message}. Please try loading manually.`;
+         // alert(`${contextMessage}:\n${error.message}`); // Alert might be too intrusive for default load failure
+         resetApplicationState(false); // Reset state but keep load buttons enabled and don't clear the error status
     }
 
 
@@ -299,12 +266,11 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {string} psNameKey - The exact key found for 'PS Name'.
      */
     function processRawData(sourceData, psNameKey) {
-        // Reset global state related to processed data before processing new data
+        // Reset state specific to processing
         processedData = [];
         psNameToIndexMap = {};
         psNames = [];
-        totalAllBallots = 0; // Reset total count as well
-
+        totalAllBallots = 0; // Reset total when new data is processed
         const seenPsNames = new Set();
 
         sourceData.forEach((rawRow, index) => {
@@ -313,32 +279,35 @@ document.addEventListener('DOMContentLoaded', () => {
                 // console.warn(`Skipping row ${index + 2} (source) due to empty PS Name.`);
                 return;
             }
-            // Normalize PS Name for duplicate checking (e.g., trim extra spaces)
-            const normalizedPsName = originalPsName.replace(/\s+/g, ' ').trim();
-            if (seenPsNames.has(normalizedPsName)) {
-                 // console.warn(`Skipping duplicate PS Name: "${originalPsName}" (normalized: "${normalizedPsName}") at row ${index + 2} (source).`);
+            // Handle potential duplicates case-insensitively for robustness
+            const lowerCasePsName = originalPsName.toLowerCase();
+            if (seenPsNames.has(lowerCasePsName)) {
+                 console.warn(`Skipping duplicate PS Name (case-insensitive): "${originalPsName}" at row ${index + 2} (source).`);
                  return;
             }
-            seenPsNames.add(normalizedPsName);
+            seenPsNames.add(lowerCasePsName);
 
             const processedRow = {
                 originalIndex: index,
-                psName: originalPsName, // Store the original name for display
+                psName: originalPsName, // Store the original casing
                 voters: safeParseInt(findValueCaseInsensitive(rawRow, 'Total Number of Voter') || '0'),
                 candidates: {},
                 ballotInfo: {}
             };
 
-            // Find candidate names using case-insensitive helper if needed, or stick to prefix
-            // Using getCandidateNamesJS as it relies on specific prefixes (ZPM, APM, GPM)
             processedRow.candidates.zpc = getCandidateNamesJS(rawRow, 'ZPM');
             processedRow.candidates.ap = getCandidateNamesJS(rawRow, 'APM');
             processedRow.candidates.ward = getCandidateNamesJS(rawRow, 'GPM');
 
+            // Handle potential case variations in keys like 'Nil'/ 'nil' during candidate name extraction
+            // (Already handled inside getCandidateNamesJS)
+
+            // Ensure ballot calculation columns exist, using case-insensitive lookup
             const zpcFlag = processedRow.candidates.zpc.length >= 2 ? 1 : 0;
             const apFlag = processedRow.candidates.ap.length >= 2 ? 1 : 0;
             const wardFlag = processedRow.candidates.ward.length >= 2 ? 1 : 0;
 
+            // Calculate ballot info based on flags and voters
             processedRow.ballotInfo = {
                 zpcNeeded: zpcFlag === 1,
                 apNeeded: apFlag === 1,
@@ -349,14 +318,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 psTotal: (zpcFlag * processedRow.voters) + (apFlag * processedRow.voters) + (wardFlag * processedRow.voters)
             };
             processedData.push(processedRow);
-            // Accumulate total ballots here after processing each valid row
-            totalAllBallots += processedRow.ballotInfo.psTotal;
+            totalAllBallots += processedRow.ballotInfo.psTotal; // Accumulate total here
         });
 
-        // Sort processed data alphabetically by PS Name
+        // Sort after processing all rows
         processedData.sort((a, b) => a.psName.localeCompare(b.psName));
 
-        // Rebuild the index map and psNames array after sorting
+        // Build the index map after sorting
         processedData.forEach((row, newIndex) => {
              psNames.push(row.psName);
              psNameToIndexMap[row.psName] = newIndex;
@@ -365,32 +333,46 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log(`Processed ${processedData.length} unique PS entries. Total ballots: ${totalAllBallots}`);
     }
 
+    /**
+    * Helper to find a value in an object using a case-insensitive key.
+    */
+    function findValueCaseInsensitive(obj, targetKey) {
+        if (!obj || typeof targetKey !== 'string') return undefined;
+        const lowerTargetKey = targetKey.toLowerCase();
+        for (const key in obj) {
+            if (Object.hasOwnProperty.call(obj, key) && String(key).toLowerCase() === lowerTargetKey) {
+                return obj[key];
+            }
+        }
+        return undefined;
+    }
 
     /**
      * Central function to trigger updates for both UI views.
      */
      function updateAllUIs() {
-         updateBallotTableUI(); // This will use the globally calculated totalAllBallots
+         updateBallotTableUI();
          populatePsListUI();
-         clearCandidateColumnsUI();
+         clearCandidateColumnsUI(); // Clear candidate display initially
          const previouslySelected = psList.querySelector('.selected');
          if (previouslySelected) {
              previouslySelected.classList.remove('selected');
          }
+         // Filter inputs should be cleared by setControlsState if needed
      }
 
-    // --- UI Update Functions ---
+    // --- UI Update Functions (updateBallotTableUI, filterBallotTable, Tooltip Handlers, populatePsListUI, filterPsList, handlePsSelect, updateCandidateColumnsUI, clearCandidateColumnsUI - unchanged) ---
     function updateBallotTableUI() {
         ballotTableBody.innerHTML = '';
-        // totalAllBallots is now calculated during processRawData
+        // Total calculation moved to processRawData
         if (!processedData.length) {
             ballotSummaryLabel.textContent = 'No data loaded or processed.';
             return;
         }
         processedData.forEach((row, index) => {
-            // No need to recalculate total here
+            // totalAllBallots += row.ballotInfo.psTotal; // No need to recalculate here
             const tr = document.createElement('tr');
-            tr.dataset.rowIndex = index; // Use the index *after sorting*
+            tr.dataset.rowIndex = index;
             tr.innerHTML = `
                 <td>${index + 1}</td>
                 <td>${row.psName}</td>
@@ -405,46 +387,19 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
             ballotTableBody.appendChild(tr);
         });
-        // Display the pre-calculated total
-        ballotSummaryLabel.textContent = `Total Ballots Required (all ${processedData.length} PS): ${totalAllBallots.toLocaleString()}`;
+        ballotSummaryLabel.textContent = `Total Ballots Required (all PS): ${totalAllBallots.toLocaleString()}`;
     }
-
     function filterBallotTable() {
         const searchTerm = ballotSearchInput.value.trim().toLowerCase();
         const rows = ballotTableBody.getElementsByTagName('tr');
-        let visibleRowCount = 0;
-        let visibleTotalBallots = 0; // Recalculate visible total for summary if needed
-
         for (const row of rows) {
-            const psNameCell = row.cells[1]; // PS Name is in the second cell (index 1)
-            let isVisible = false;
+            const psNameCell = row.cells[1];
             if (psNameCell) {
                 const psName = psNameCell.textContent.toLowerCase();
-                isVisible = psName.includes(searchTerm);
-                row.classList.toggle('hidden', !isVisible);
-            } else {
-                row.classList.add('hidden'); // Hide rows without a PS Name cell if any exist
+                row.classList.toggle('hidden', !psName.includes(searchTerm));
             }
-
-            // If row is visible, update counts
-            if (isVisible && row.dataset.rowIndex !== undefined) {
-                visibleRowCount++;
-                const rowIndex = parseInt(row.dataset.rowIndex, 10);
-                if (rowIndex >= 0 && rowIndex < processedData.length) {
-                    visibleTotalBallots += processedData[rowIndex].ballotInfo.psTotal;
-                }
-            }
-        }
-
-        // Update summary label based on filter
-        if (searchTerm) {
-             ballotSummaryLabel.textContent = `Total Ballots (Filtered - ${visibleRowCount} PS): ${visibleTotalBallots.toLocaleString()} / Total (all ${processedData.length} PS): ${totalAllBallots.toLocaleString()}`;
-        } else {
-             ballotSummaryLabel.textContent = `Total Ballots Required (all ${processedData.length} PS): ${totalAllBallots.toLocaleString()}`;
         }
     }
-
-    // Tooltip Handlers (Unchanged)
     function handleTableMouseOver(event) {
         const row = event.target.closest('tr');
         if (row && row.dataset.rowIndex !== undefined) {
@@ -454,53 +409,49 @@ document.addEventListener('DOMContentLoaded', () => {
                 const zpcText = rowData.candidates.zpc.length > 0 ? rowData.candidates.zpc.join(', ') : 'Uncontested or Nil';
                 const apText = rowData.candidates.ap.length > 0 ? rowData.candidates.ap.join(', ') : 'Uncontested or Nil';
                 const wardText = rowData.candidates.ward.length > 0 ? rowData.candidates.ward.join(', ') : 'Uncontested or Nil';
-                tooltipElement.innerHTML = `<strong>ZPC:</strong> ${zpcText}<br><strong>AP:</strong> ${apText}<br><strong>Ward:</strong> ${wardText}`; // Use innerHTML for breaks
+                // Corrected tooltip text formatting
+                tooltipElement.innerHTML = `ZPC Candidates: ${zpcText}<br>AP Candidates:  ${apText}<br>Ward Candidates: ${wardText}`;
                 tooltipElement.style.display = 'block';
             } else { tooltipElement.style.display = 'none'; }
         } else { tooltipElement.style.display = 'none'; }
     }
     function handleTableMouseOut(event) {
          const relatedTarget = event.relatedTarget;
-         // Hide if moving outside the table body entirely, or onto the tooltip itself briefly
-         if (!ballotTableBody.contains(relatedTarget) || relatedTarget === tooltipElement) {
-            // A small delay can prevent flickering if moving quickly over adjacent cells
-            setTimeout(() => {
-                // Check again in case the mouse quickly re-entered another row
-                if (tooltipElement.style.display === 'block' && !ballotTableBody.matches(':hover')) {
-                     tooltipElement.style.display = 'none';
-                }
-            }, 50);
+         // Improved check to prevent flickering when moving onto the tooltip itself
+         if (!ballotTableBody.contains(relatedTarget) && !tooltipElement.contains(relatedTarget)) {
+            tooltipElement.style.display = 'none';
          }
     }
     function handleTableMouseMove(event) {
         if (tooltipElement.style.display === 'block') {
             const xOffset = 15, yOffset = 10;
-            // Adjust position to prevent tooltip going off-screen
-            const chartRect = ballotCountView.getBoundingClientRect(); // Or use body/window
-            const tipWidth = tooltipElement.offsetWidth;
-            const tipHeight = tooltipElement.offsetHeight;
+             // Ensure tooltip stays within viewport boundaries (basic implementation)
+             const viewportWidth = window.innerWidth;
+             const viewportHeight = window.innerHeight;
+             const tooltipRect = tooltipElement.getBoundingClientRect(); // Get current size
 
-            let left = event.pageX + xOffset;
-            let top = event.pageY + yOffset;
+             let left = event.pageX + xOffset;
+             let top = event.pageY + yOffset;
 
-            // Check horizontal boundaries
-            if (left + tipWidth > window.innerWidth + window.scrollX - xOffset) {
-                left = event.pageX - tipWidth - xOffset; // Place to the left
-            }
-            // Check vertical boundaries
-            if (top + tipHeight > window.innerHeight + window.scrollY - yOffset) {
-                top = event.pageY - tipHeight - yOffset; // Place above
-            }
+             // Adjust left position if tooltip goes off-screen right
+             if (left + tooltipRect.width > viewportWidth) {
+                 left = event.pageX - tooltipRect.width - xOffset;
+             }
+              // Adjust top position if tooltip goes off-screen bottom
+             if (top + tooltipRect.height > viewportHeight) {
+                 top = event.pageY - tooltipRect.height - yOffset;
+             }
+             // Prevent negative coordinates (going off top/left)
+             if (left < 0) left = 0;
+             if (top < 0) top = 0;
 
             tooltipElement.style.left = `${left}px`;
             tooltipElement.style.top = `${top}px`;
         }
     }
-
-    // PS List and Candidate Column UI Functions (Unchanged)
     function populatePsListUI() {
         psList.innerHTML = '';
-        psSearchInput.value = ''; // Clear search when repopulating
+        psSearchInput.value = '';
         if (!psNames.length) return;
         psNames.forEach((name) => {
             const li = document.createElement('li');
@@ -508,56 +459,28 @@ document.addEventListener('DOMContentLoaded', () => {
             li.dataset.psName = name;
             psList.appendChild(li);
         });
-        filterPsList(); // Apply filter in case search input still has value (though cleared above)
     }
     function filterPsList() {
         const searchTerm = psSearchInput.value.trim().toLowerCase();
         const items = psList.getElementsByTagName('li');
-        let firstVisible = null; // Track the first visible item
-
         for (const item of items) {
-            const psName = item.dataset.psName.toLowerCase(); // Use data-ps-name for consistency
-            const isVisible = psName.includes(searchTerm);
-            item.classList.toggle('hidden', !isVisible);
-            if (isVisible && !firstVisible) {
-                firstVisible = item;
-            }
+            const psName = item.textContent.toLowerCase();
+            item.classList.toggle('hidden', !psName.includes(searchTerm));
         }
-         // Optional: Automatically select the first visible item if search yields results
-         // const previouslySelected = psList.querySelector('.selected');
-         // if (firstVisible && (!previouslySelected || previouslySelected.classList.contains('hidden'))) {
-         //    if (previouslySelected) previouslySelected.classList.remove('selected');
-         //    firstVisible.classList.add('selected');
-         //    handlePsSelect({ target: firstVisible }); // Trigger update
-         // } else if (!firstVisible && previouslySelected) {
-         //    // If search yields no results, clear selection and candidate view
-         //    previouslySelected.classList.remove('selected');
-         //    clearCandidateColumnsUI();
-         // }
     }
     function handlePsSelect(event) {
-        if (event.target.tagName === 'LI' && !event.target.classList.contains('hidden')) { // Only select visible items
+        if (event.target.tagName === 'LI') {
             const selectedLi = event.target;
             const psName = selectedLi.dataset.psName;
             const previouslySelected = psList.querySelector('.selected');
-
-            if (previouslySelected === selectedLi) return; // Clicked same item again
-
             if (previouslySelected) previouslySelected.classList.remove('selected');
             selectedLi.classList.add('selected');
-
             if (psName && psNameToIndexMap.hasOwnProperty(psName)) {
                 const index = psNameToIndexMap[psName];
                 if(index >= 0 && index < processedData.length){
                     updateCandidateColumnsUI(processedData[index].candidates);
-                } else {
-                    console.warn(`Index ${index} out of bounds for PS Name: ${psName}`);
-                    clearCandidateColumnsUI();
-                }
-            } else {
-                console.warn(`PS Name not found in map: ${psName}`);
-                clearCandidateColumnsUI();
-            }
+                } else { clearCandidateColumnsUI(); }
+            } else { clearCandidateColumnsUI(); }
         }
     }
     function updateCandidateColumnsUI(candidates) {
@@ -581,40 +504,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /**
      * Exports the current data *visible* in the ballot table view to an Excel file.
-     * (Unchanged from previous correct version)
      */
      function exportBallotTable() {
         if (!processedData.length) {
             alert("No data available to export."); return;
         }
         const dataToExport = [];
-        // Explicitly define headers in the desired order
         const headers = ["No.", "PS Name", "Total Voters", "ZPC Ballot", "Total ZPC Ballots", "AP Ballot", "Total AP Ballots", "Ward Ballot", "Total Ward Ballots", "Total Ballots"];
         const rows = ballotTableBody.getElementsByTagName('tr');
         let visibleRowCount = 0;
         let visibleTotalBallots = 0;
 
-        // Add header row to the export array first
-        // dataToExport.push(headers); // SheetJS adds headers by default from keys
-
         for (const row of rows) {
-             if (!row.classList.contains('hidden')) { // Only export visible rows
+             if (!row.classList.contains('hidden')) {
                 visibleRowCount++;
                 const rowIndex = parseInt(row.dataset.rowIndex, 10);
                  if (rowIndex >= 0 && rowIndex < processedData.length) {
                     const rowData = processedData[rowIndex];
                     visibleTotalBallots += rowData.ballotInfo.psTotal;
-                    // Create object with keys matching headers for json_to_sheet
                     dataToExport.push({
-                        [headers[0]]: visibleRowCount, // Use visible count for "No."
-                        [headers[1]]: rowData.psName,
-                        [headers[2]]: rowData.voters,
-                        [headers[3]]: rowData.ballotInfo.zpcNeeded ? 'Yes' : 'No',
-                        [headers[4]]: rowData.ballotInfo.zpcTotal,
-                        [headers[5]]: rowData.ballotInfo.apNeeded ? 'Yes' : 'No',
-                        [headers[6]]: rowData.ballotInfo.apTotal,
-                        [headers[7]]: rowData.ballotInfo.wardNeeded ? 'Yes' : 'No',
-                        [headers[8]]: rowData.ballotInfo.wardTotal,
+                        [headers[0]]: visibleRowCount, [headers[1]]: rowData.psName, [headers[2]]: rowData.voters,
+                        [headers[3]]: rowData.ballotInfo.zpcNeeded ? 'Yes' : 'No', [headers[4]]: rowData.ballotInfo.zpcTotal,
+                        [headers[5]]: rowData.ballotInfo.apNeeded ? 'Yes' : 'No', [headers[6]]: rowData.ballotInfo.apTotal,
+                        [headers[7]]: rowData.ballotInfo.wardNeeded ? 'Yes' : 'No', [headers[8]]: rowData.ballotInfo.wardTotal,
                         [headers[9]]: rowData.ballotInfo.psTotal
                     });
                  }
@@ -623,33 +535,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!dataToExport.length) {
             alert("No data currently visible in the table to export (check filter?)."); return;
         }
-        // Add summary row at the end
         dataToExport.push({}); // Add an empty row for spacing
-        dataToExport.push({
-            [headers[1]]: `Visible Rows Total (${visibleRowCount})`, // Add count to label
-            [headers[9]]: visibleTotalBallots // Sum of 'Total Ballots' for visible rows
-        });
+        dataToExport.push({ [headers[1]]: "Visible Rows Total", [headers[9]]: visibleTotalBallots }); // Add summary row
 
         try {
-            // Use json_to_sheet with explicit header order
-            const ws = XLSX.utils.json_to_sheet(dataToExport, { header: headers, skipHeader: false });
-
-            // --- Optional: Column Widths ---
-             const colWidths = [
-                 { wch: 5 },  // No.
-                 { wch: 35 }, // PS Name
-                 { wch: 15 }, // Total Voters
-                 { wch: 10 }, // ZPC Ballot
-                 { wch: 18 }, // Total ZPC Ballots
-                 { wch: 10 }, // AP Ballot
-                 { wch: 18 }, // Total AP Ballots
-                 { wch: 12 }, // Ward Ballot
-                 { wch: 18 }, // Total Ward Ballots
-                 { wch: 15 }  // Total Ballots
-             ];
-             ws['!cols'] = colWidths;
-            // --- End Optional ---
-
+            const ws = XLSX.utils.json_to_sheet(dataToExport, { header: headers });
+            // Optional: Adjust column widths (basic example)
+            ws['!cols'] = [ {wch:5}, {wch:30}, {wch:15}, {wch:10}, {wch:18}, {wch:10}, {wch:18}, {wch:10}, {wch:18}, {wch:18} ]; // Adjust widths as needed
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Ballot Count Export");
             XLSX.writeFile(wb, "Ballot_Count_Export.xlsx");
@@ -664,38 +556,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /**
      * Switches the visible UI view.
-     * NOTE: Functionality is currently bypassed by the 'return' statement.
      */
     function switchView() {
-        // Keep this bypassed as per the original modification request
+        //exit function (bypass)
         return;
 
-        // If you want to re-enable view switching, remove the 'return' above.
-        /*
-        if (!processedData.length) {
-            alert("Load data before switching views.");
-            return; // Don't switch if no data
-        }
-
+        // Keep the rest of the function as it was, in case you want to re-enable it later
         if (currentView === 'ballot_count') {
             ballotCountView.classList.remove('active-view');
             contestantNamesView.classList.add('active-view');
             currentView = 'contestant_names';
             switchViewButton.textContent = 'Switch to Ballot Count View';
             document.title = 'Polling Station Candidate Viewer';
-            // Optionally populate/filter PS list when switching to this view
-             // populatePsListUI(); // Already populated by updateAllUIs
-             filterPsList(); // Ensure filter is applied
         } else {
             contestantNamesView.classList.remove('active-view');
             ballotCountView.classList.add('active-view');
             currentView = 'ballot_count';
             switchViewButton.textContent = 'Switch to Contestant View';
-            document.title = 'Ballot Paper Requirements';
-             // Optionally filter ballot table when switching back
-             filterBallotTable();
+             document.title = 'Ballot Paper Requirements';
         }
-        */
     }
 
     /**
@@ -703,79 +582,72 @@ document.addEventListener('DOMContentLoaded', () => {
       * @param {boolean} loading - Is data currently being loaded?
       */
     function setControlsState(loading) {
-        const hasData = processedData && processedData.length > 0;
+        // Check for data *after* potential loading completes (or before it starts)
+        const hasData = !loading && processedData && processedData.length > 0;
 
-        // --- Input Controls ---
-        // Disabled *only* when actively loading
+        // Primary load actions are disabled *only* when loading is active
         loadFromUrlButton.disabled = loading;
-        fileInput.disabled = loading;
+        fileInput.disabled = loading; // Disable the input itself
         if (fileInputLabel) {
             fileInputLabel.classList.toggle('button-disabled', loading);
         }
-        googleSheetUrlInput.disabled = loading; // Disable URL input during any load
 
-        // --- Action/View Controls ---
-        // Disabled if loading OR if there's no data
+        // Data-dependent actions are disabled if loading OR if no data exists
         exportButton.disabled = loading || !hasData;
         ballotSearchInput.disabled = loading || !hasData;
         ballotSearchButton.disabled = loading || !hasData;
         psSearchInput.disabled = loading || !hasData;
-        // Switch view button might be enabled even without data, but the switch logic prevents it.
-        // Let's disable it too if no data or loading.
-        switchViewButton.disabled = loading || !hasData;
+        switchViewButton.disabled = loading || !hasData; // Disable view switching too if no data/loading
 
-
-        // --- Clear inputs/filters when disabling ---
+        // Clear search fields if they are being disabled
         if (loading || !hasData) {
             ballotSearchInput.value = '';
             psSearchInput.value = '';
-             // Re-apply filters to clear visual state if controls are disabled
-             if (ballotTableBody.hasChildNodes()) filterBallotTable();
-             if (psList.hasChildNodes()) filterPsList();
-             if(!hasData) clearCandidateColumnsUI(); // Clear candidate view if no data
+            // Also clear visual filters if controls are disabled
+            filterBallotTable();
+            filterPsList();
         }
     }
-
 
     /**
      * Resets the application state (clears data, UI, disables controls).
      * @param {boolean} [clearStatus=true] - Whether to reset the status label.
      */
      function resetApplicationState(clearStatus = true) {
-         // Clear data structures
          rawData = [];
          processedData = [];
          psNames = [];
          psNameToIndexMap = {};
          totalAllBallots = 0;
-         // isLoading should be handled by start/end loading, ensure it's false here
-         isLoading = false;
+         // isLoading should be reset by endLoading or startLoading
 
-         // Reset UI elements
-         resetUIOnly(); // Clear tables/lists
+         resetUIOnly(); // Clear UI tables/lists
          ballotSummaryLabel.textContent = 'Load data to see totals.';
-         googleSheetUrlInput.value = ''; // Clear URL input
-         fileInput.value = ''; // Clear file input selection state
-         ballotSearchInput.value = ''; // Clear search fields
+         googleSheetUrlInput.value = '';
+         ballotSearchInput.value = '';
          psSearchInput.value = '';
+         // fileInput.value = ''; // Resetting this happens in endLoading
 
          if (clearStatus) {
-            statusLabel.textContent = 'No data loaded. Load default, upload file, or use URL.'; // Updated message
+            statusLabel.textContent = 'No data loaded.';
          }
 
-         // Update control states (will disable data-dependent controls)
-         setControlsState(false); // Not loading, no data
+         setControlsState(isLoading); // Update controls based on current loading state (usually false after reset)
      }
 
 
     // --- Initial Setup ---
-    console.log("DOM Content Loaded. Initializing...");
-    setControlsState(true); // Start with controls disabled *until* default load attempt finishes
-    document.title = 'Ballot Paper Requirements'; // Set default title
-    ballotCountView.classList.add('active-view'); // Ensure ballot view is active by default
-    contestantNamesView.classList.remove('active-view'); // Ensure other view is hidden
+    // 1. Set initial UI state (controls disabled, title set)
+    document.title = 'Ballot Paper Requirements';
+    setControlsState(true); // Start with controls disabled as we attempt default load
+    statusLabel.textContent = 'Initializing...'; // Initial status
 
-    // Attempt to load the default TSV file automatically
-    loadDefaultTsv(); // This will handle start/end loading and update controls via endLoading/handleLoadingError
+    // 2. Attempt to load default data
+    await loadDefaultCsv(); // Wait for the default load attempt to finish
+
+    // 3. Final state is set by endLoading() within loadDefaultCsv (or its error handler)
+    // setControlsState(false); // No longer needed here, handled by endLoading()
+
+    console.log("Initialization complete. Default data load attempted.");
 
 }); // End DOMContentLoaded
