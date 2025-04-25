@@ -216,7 +216,7 @@ document.addEventListener('DOMContentLoaded', () => {
      * This is called automatically on page load.
      */
     async function loadDefaultTsv() {
-        const tsvFileName = 'data.tsv'; // Define the default filename
+        const tsvFileName = '24 april data.tsv'; // Define the default filename
         if (!startLoading(`Loading default data from ${tsvFileName}...`)) return;
 
         try {
