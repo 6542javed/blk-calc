@@ -28,14 +28,21 @@
             border: 1px solid #ddd;
             border-radius: 5px;
             background-color: #f9f9f9;
-            overflow: scroll;
+            overflow: scroll; /* Changed to scroll to handle potential overflow */
         }
         #candidateDisplay h2 {
             margin-top: 0;
-            margin-bottom: 15px;
+            margin-bottom: 10px; /* Adjusted margin */
             border-bottom: 1px solid #eee;
             padding-bottom: 10px;
             font-size: 1.2em;
+        }
+        /* ADDED: Style for voter count */
+        #psVoterCount {
+            font-weight: bold;
+            margin-bottom: 15px;
+            font-size: 1.1em;
+            color: #333;
         }
         .candidate-columns {
             display: flex;
@@ -151,7 +158,8 @@
 
         <!-- Candidate Display Area (Initially Hidden) -->
         <div id="candidateDisplay" class="hidden">
-             <h2>Candidates for Selected PS</h2>
+             <h2>Candidates & Info for Selected PS</h2> <!-- MODIFIED: Title -->
+             <p id="psVoterCount"></p> <!-- ADDED: Element for voter count -->
              <div class="candidate-columns">
                  <div class="candidate-column">
                      <h3>Ward Candidates</h3>
@@ -189,11 +197,13 @@
             const zpcCandidateList = document.getElementById('zpcCandidateList');
             const apCandidateList = document.getElementById('apCandidateList');
             const wardCandidateList = document.getElementById('wardCandidateList');
+            const psVoterCountElement = document.getElementById('psVoterCount'); // ADDED: Voter count element
 
             // --- Global State ---
             let rawData = [];
             let hierarchy = new Map(); // Map<zpc, Map<ap, Map<gp, Map<ward, Set<ps>>>>>
-            let psCandidateData = new Map(); // Map<formattedPsName, {zpc: [], ap: [], ward: []}>
+            // MODIFIED: psCandidateData now stores { zpc: [], ap: [], ward: [], totalVoters: number|string }
+            let psCandidateData = new Map();
             let headerMap = {}; // To store actual header names found
 
             // --- Constants ---
@@ -208,14 +218,17 @@
             const GP_NO_KEY = 'gp no.';
             const WARD_NO_KEY = 'ward no.';
             const PS_NO_KEY = 'ps no.';
+            const TOTAL_VOTER_KEY = 'total number of voter'; // ADDED: Key for voter count column
             // Add candidate prefixes (ensure these match your sheet headers *start*)
             const ZPC_CANDIDATE_PREFIX = 'ZPM';
             const AP_CANDIDATE_PREFIX = 'APM';
             const WARD_CANDIDATE_PREFIX = 'GPM';
 
+            // MODIFIED: Added TOTAL_VOTER_KEY to required keys
             const REQ_KEYS = [
                 ZPC_KEY, AP_KEY, GP_KEY, WARD_KEY, PS_KEY,
-                ZPC_NO_KEY, AP_NO_KEY, GP_NO_KEY, WARD_NO_KEY, PS_NO_KEY
+                ZPC_NO_KEY, AP_NO_KEY, GP_NO_KEY, WARD_NO_KEY, PS_NO_KEY,
+                TOTAL_VOTER_KEY
             ];
             // Note: Candidate columns are not strictly required for the dropdowns,
             // but are required for the candidate display feature. Add checks if needed.
@@ -347,11 +360,21 @@
                     }
                 });
 
-                if (missingKeys.length > 0) {
-                    throw new Error(`Required columns not found in ${sourceDescription}: ${missingKeys.join(', ')}`);
+                // Check if the TOTAL_VOTER_KEY was actually found
+                if (!headerMap[TOTAL_VOTER_KEY]) {
+                     console.warn(`Warning: Column '${TOTAL_VOTER_KEY}' not found. Voter count will not be available.`);
+                     // Optionally inform the user via statusLabel or alert
+                     // statusLabel.textContent += ` Warning: Column '${TOTAL_VOTER_KEY}' not found.`;
                 }
 
-                // Process data into hierarchy AND extract candidate data
+                // Check *other* required keys (exclude TOTAL_VOTER_KEY for the main error if it's missing)
+                const criticalMissingKeys = missingKeys.filter(key => key !== TOTAL_VOTER_KEY.toUpperCase());
+                if (criticalMissingKeys.length > 0) {
+                    throw new Error(`Required columns not found in ${sourceDescription}: ${criticalMissingKeys.join(', ')}`);
+                }
+
+
+                // Process data into hierarchy AND extract candidate/voter data
                 processData(); // Re-uses the existing processing logic
 
                 // Populate the first dropdown
@@ -469,18 +492,34 @@
 
                          wardSet.add(psName);
 
-                         // Store Candidate Data (using the formatted psName as the key)
+                         // Store Candidate and Voter Data (using the formatted psName as the key)
                          // Only store the first occurrence for a given PS name to avoid overwriting
-                         // if the same PS name appears multiple times (e.g., due to data entry issues)
                          if (!processedPsNames.has(psName)) {
-                             const candidates = {
+                             // ADDED: Extract voter count
+                             const voterCountHeader = headerMap[TOTAL_VOTER_KEY]; // Get the actual header name found
+                             let totalVoters = 'N/A'; // Default value
+                             if (voterCountHeader && row[voterCountHeader] !== null && row[voterCountHeader] !== undefined) {
+                                 const rawVoterCount = String(row[voterCountHeader]).trim();
+                                 // Try to parse as integer, handle potential non-numeric values gracefully
+                                 const parsedVoters = parseInt(rawVoterCount, 10);
+                                 if (!isNaN(parsedVoters)) {
+                                     totalVoters = parsedVoters;
+                                 } else if (rawVoterCount) {
+                                     // If it's not a number but not empty, keep the original string (e.g., "pending")
+                                     totalVoters = rawVoterCount;
+                                 }
+                             }
+
+                             // MODIFIED: Store candidates AND voter count
+                             const candidatesAndVoters = {
                                  zpc: getCandidateNamesJS(row, ZPC_CANDIDATE_PREFIX),
                                  ap: getCandidateNamesJS(row, AP_CANDIDATE_PREFIX),
-                                 ward: getCandidateNamesJS(row, WARD_CANDIDATE_PREFIX)
+                                 ward: getCandidateNamesJS(row, WARD_CANDIDATE_PREFIX),
+                                 totalVoters: totalVoters // Store the processed voter count
                              };
-                             psCandidateData.set(psName, candidates);
+                             psCandidateData.set(psName, candidatesAndVoters);
                              processedPsNames.add(psName);
-                             // console.log(`Stored candidates for PS: ${psName}`, candidates); // Uncomment for debugging
+                             // console.log(`Stored data for PS: ${psName}`, candidatesAndVoters); // Uncomment for debugging
                          }
                      } else {
                         // Optionally log skipped rows
@@ -488,7 +527,7 @@
                      }
                  });
                  // console.log("Hierarchy built:", hierarchy); // For debugging
-                 // console.log("Candidate data mapped:", psCandidateData); // For debugging
+                 // console.log("Candidate/Voter data mapped:", psCandidateData); // For debugging
                  if (hierarchy.size === 0) {
                      console.warn("Hierarchy map is empty after processing. Check data format and required columns.");
                      statusLabel.textContent += " Warning: No valid hierarchy data found. Check CSV format/content.";
@@ -571,20 +610,21 @@
              }
 
              // --- Candidate Display Logic ---
-             // No changes needed here (handlePsSelectChange, displayCandidates, clearAndHideCandidates)
+             // MODIFIED: Added handling for voter count display
 
              function handlePsSelectChange() {
                  const selectedPs = psSelect.value;
                  if (selectedPs && psCandidateData.has(selectedPs)) {
-                     const candidates = psCandidateData.get(selectedPs);
-                     displayCandidates(candidates);
+                     const data = psCandidateData.get(selectedPs); // Now contains candidates and voters
+                     displayCandidatesAndVoters(data); // MODIFIED: Call updated display function
                  } else {
                      clearAndHideCandidates();
                  }
              }
 
-             function displayCandidates(candidates) {
-                 if (!candidates) {
+             // MODIFIED: Function renamed and updated to handle voter count
+             function displayCandidatesAndVoters(data) {
+                 if (!data) {
                     clearAndHideCandidates();
                     return;
                  }
@@ -605,17 +645,23 @@
                      }
                  };
 
-                 populateList(zpcCandidateList, candidates.zpc);
-                 populateList(apCandidateList, candidates.ap);
-                 populateList(wardCandidateList, candidates.ward);
+                 // Populate candidate lists
+                 populateList(zpcCandidateList, data.zpc);
+                 populateList(apCandidateList, data.ap);
+                 populateList(wardCandidateList, data.ward);
+
+                 // ADDED: Display the total voter count
+                 psVoterCountElement.textContent = `Total Number of Voters: ${data.totalVoters ?? 'N/A'}`;
 
                  candidateDisplayDiv.classList.remove('hidden'); // Show the display area
              }
 
+             // MODIFIED: Clear the voter count element as well
              function clearAndHideCandidates() {
                  zpcCandidateList.innerHTML = '';
                  apCandidateList.innerHTML = '';
                  wardCandidateList.innerHTML = '';
+                 psVoterCountElement.textContent = ''; // ADDED: Clear voter count
                  candidateDisplayDiv.classList.add('hidden'); // Hide the display area
              }
 
