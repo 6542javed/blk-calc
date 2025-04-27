@@ -28,7 +28,7 @@
             border: 1px solid #ddd;
             border-radius: 5px;
             background-color: #f9f9f9;
-            overflow: scroll; /* Changed to scroll to handle potential overflow */
+            overflow-x: auto; /* Changed to auto for horizontal scroll if needed */
         }
         #candidateDisplay h2 {
             margin-top: 0;
@@ -37,13 +37,24 @@
             padding-bottom: 10px;
             font-size: 1.2em;
         }
-        /* ADDED: Style for voter count */
-        #psVoterCount {
-            font-weight: bold;
+        /* Styles for PS Info Section */
+        #psInfoSection {
+            margin-top: 15px;
             margin-bottom: 15px;
-            font-size: 1.1em;
+            padding-top: 10px;
+            border-top: 1px solid #eee;
+            font-size: 0.95em;
             color: #333;
         }
+         #psInfoSection p {
+            margin: 5px 0;
+            line-height: 1.4;
+         }
+        #psVoterCount {
+            font-weight: bold;
+            font-size: 1.05em; /* Slightly larger */
+        }
+        /* Styles for Candidate Columns */
         .candidate-columns {
             display: flex;
             gap: 20px;
@@ -105,6 +116,7 @@
              #googleSheetUrl { width: calc(100% - 18px); } /* Adjust width considering padding/border */
             .button { width: 100%; } /* Make buttons full width */
             .top-bar { justify-content: center; text-align: center; }
+            .candidate-columns { flex-direction: column; } /* Stack candidate columns on small screens */
         }
     </style>
 </head>
@@ -158,7 +170,8 @@
 
         <!-- Candidate Display Area (Initially Hidden) -->
         <div id="candidateDisplay" class="hidden">
-             <h2>Candidates & Info for Selected PS</h2> <!-- MODIFIED: Title -->
+             <h2>Candidates & Info for Selected PS</h2>
+             <!-- Candidate Columns -->
              <div class="candidate-columns">
                  <div class="candidate-column">
                      <h3>Ward Candidates</h3>
@@ -173,7 +186,15 @@
                     <ul id="zpcCandidateList" class="candidate-list"></ul>
                 </div>
             </div>
-            <p id="psVoterCount"></p> <!-- ADDED: Element for voter count -->
+            <!-- PS Info Section -->
+            <div id="psInfoSection">
+                 <p id="psVoterCount"></p> <!-- Moved Voter Count here -->
+                 <p id="psBigInfo"></p>       <!-- ADDED: Element for Big -->
+                 <p id="psMediumInfo"></p>    <!-- ADDED: Element for Medium -->
+                 <p id="psZonalOfficerInfo"></p> <!-- ADDED: Element for Zonal Officer -->
+                 <p id="psSectorOfficerInfo"></p> <!-- ADDED: Element for Sector Officer -->
+                 <p id="psAuthorisedOfficerInfo"></p> <!-- ADDED: Element for Authorised Officer -->
+            </div>
         </div>
         <!-- End Candidate Display Area -->
 
@@ -184,7 +205,7 @@
             // --- DOM Elements ---
             const urlInput = document.getElementById('googleSheetUrl');
             const loadUrlButton = document.getElementById('loadFromUrlButton');
-            const loadLocalButton = document.getElementById('loadLocalCsvButton'); // New button element
+            const loadLocalButton = document.getElementById('loadLocalCsvButton');
             const statusLabel = document.getElementById('status');
             const zpcSelect = document.getElementById('zpcSelect');
             const apSelect = document.getElementById('apSelect');
@@ -192,22 +213,30 @@
             const wardSelect = document.getElementById('wardSelect');
             const psSelect = document.getElementById('psSelect');
 
-            // Candidate Display Elements
+            // Candidate & Info Display Elements
             const candidateDisplayDiv = document.getElementById('candidateDisplay');
             const zpcCandidateList = document.getElementById('zpcCandidateList');
             const apCandidateList = document.getElementById('apCandidateList');
             const wardCandidateList = document.getElementById('wardCandidateList');
-            const psVoterCountElement = document.getElementById('psVoterCount'); // ADDED: Voter count element
+            const psVoterCountElement = document.getElementById('psVoterCount');
+            // ADDED: Elements for new info fields
+            const psBigInfoElement = document.getElementById('psBigInfo');
+            const psMediumInfoElement = document.getElementById('psMediumInfo');
+            const psZonalOfficerInfoElement = document.getElementById('psZonalOfficerInfo');
+            const psSectorOfficerInfoElement = document.getElementById('psSectorOfficerInfo');
+            const psAuthorisedOfficerInfoElement = document.getElementById('psAuthorisedOfficerInfo');
+
 
             // --- Global State ---
             let rawData = [];
             let hierarchy = new Map(); // Map<zpc, Map<ap, Map<gp, Map<ward, Set<ps>>>>>
-            // MODIFIED: psCandidateData now stores { zpc: [], ap: [], ward: [], totalVoters: number|string }
-            let psCandidateData = new Map();
+            // MODIFIED: psDataMap now stores an object with candidates and various PS info fields
+            let psDataMap = new Map();
             let headerMap = {}; // To store actual header names found
 
             // --- Constants ---
             const LOCAL_CSV_FILENAME = '24 april data.csv'; // Define local filename
+            // Hierarchy Keys
             const ZPC_KEY = 'zpc name';
             const AP_KEY = 'ap name';
             const GP_KEY = 'gp name';
@@ -218,29 +247,42 @@
             const GP_NO_KEY = 'gp no.';
             const WARD_NO_KEY = 'ward no.';
             const PS_NO_KEY = 'ps no.';
-            const TOTAL_VOTER_KEY = 'total number of voter'; // ADDED: Key for voter count column
-            // Add candidate prefixes (ensure these match your sheet headers *start*)
+            // Candidate Prefixes
             const ZPC_CANDIDATE_PREFIX = 'ZPM';
             const AP_CANDIDATE_PREFIX = 'APM';
             const WARD_CANDIDATE_PREFIX = 'GPM';
+            // PS Info Keys (treat these as optional)
+            const TOTAL_VOTER_KEY = 'total number of voter';
+            const BIG_KEY = 'Big'; // ADDED
+            const MEDIUM_KEY = 'Medium'; // ADDED
+            const ZONAL_OFFICER_KEY = 'Zonal Officer'; // ADDED
+            const SECTOR_OFFICER_KEY = 'Sector Officer'; // ADDED
+            const AUTHORISED_OFFICER_KEY = 'Authorised Officer'; // ADDED
 
-            // MODIFIED: Added TOTAL_VOTER_KEY to required keys
-            const REQ_KEYS = [
+            // Critical keys needed for hierarchy/basic function
+            const CRITICAL_KEYS = [
                 ZPC_KEY, AP_KEY, GP_KEY, WARD_KEY, PS_KEY,
-                ZPC_NO_KEY, AP_NO_KEY, GP_NO_KEY, WARD_NO_KEY, PS_NO_KEY,
-                TOTAL_VOTER_KEY
+                ZPC_NO_KEY, AP_NO_KEY, GP_NO_KEY, WARD_NO_KEY, PS_NO_KEY
             ];
-            // Note: Candidate columns are not strictly required for the dropdowns,
-            // but are required for the candidate display feature. Add checks if needed.
+            // Optional keys for additional info display
+            const OPTIONAL_KEYS = [
+                TOTAL_VOTER_KEY,
+                BIG_KEY,
+                MEDIUM_KEY,
+                ZONAL_OFFICER_KEY,
+                SECTOR_OFFICER_KEY,
+                AUTHORISED_OFFICER_KEY
+            ];
+
 
             // --- Event Listeners ---
             loadUrlButton.addEventListener('click', handleUrlLoad);
-            loadLocalButton.addEventListener('click', handleLocalCsvLoad); // Listener for the new button
+            loadLocalButton.addEventListener('click', handleLocalCsvLoad);
             zpcSelect.addEventListener('change', handleZpcChange);
             apSelect.addEventListener('change', handleApChange);
             gpSelect.addEventListener('change', handleGpChange);
             wardSelect.addEventListener('change', handleWardChange);
-            psSelect.addEventListener('change', handlePsSelectChange); // Listener for the final PS dropdown
+            psSelect.addEventListener('change', handlePsSelectChange);
 
             // --- Utility Functions ---
             function findHeaderKey(headers, targetKey) {
@@ -277,31 +319,27 @@
                 resetDropdown(gpSelect, 'Select GP');
                 resetDropdown(wardSelect, 'Select Ward');
                 resetDropdown(psSelect, 'Select PS');
-                clearAndHideCandidates(); // Also reset candidate display
+                clearAndHideDisplay(); // Also reset candidate/info display
             }
 
              function setLoadingState(loading) {
-                // Disable/enable both buttons and the input
                 loadUrlButton.disabled = loading;
                 loadLocalButton.disabled = loading;
                 urlInput.disabled = loading;
                 if (loading) {
                     statusLabel.textContent = 'Loading data...';
-                    resetAllDropdowns(); // Disable dropdowns and clear candidates while loading
-                } else {
-                    // Status will be updated on success/error by the calling function
+                    resetAllDropdowns();
                 }
              }
 
             // --- Candidate Helper Functions ---
-            // Copied from script.js - No changes needed here
             function getCandidateNamesJS(row, prefix) {
                 const candidates = [];
                 if (!row) return candidates;
                 const matchingHeaders = Object.keys(row).filter(key =>
                     typeof key === 'string' && key.trim().toLowerCase().startsWith(prefix.toLowerCase())
                 );
-                matchingHeaders.sort(); // Simple sort
+                matchingHeaders.sort();
 
                 for (const key of matchingHeaders) {
                     let value = row[key];
@@ -315,71 +353,82 @@
                 return candidates;
             }
 
-            // Helper to format No - Name, handling missing parts - No changes needed here
             function formatNoName(no, name) {
                 const numStr = String(no || '').trim();
                 const nameStr = String(name || '').trim();
-
-                if (numStr && nameStr) {
-                    return `${numStr} - ${nameStr}`;
-                } else if (nameStr) {
-                    return nameStr;
-                } else if (numStr) {
-                    return numStr;
-                } else {
-                    return '';
-                }
+                if (numStr && nameStr) return `${numStr} - ${nameStr}`;
+                if (nameStr) return nameStr;
+                if (numStr) return numStr;
+                return '';
             }
+
+             // Helper function to get value from row using mapped header, providing a default
+             function getOptionalValue(row, key, defaultValue = 'N/A') {
+                const header = headerMap[key]; // Get the actual header name
+                if (header && row[header] !== null && row[header] !== undefined) {
+                    const value = String(row[header]).trim();
+                    return value === '' ? defaultValue : value; // Return default if value is empty string
+                }
+                return defaultValue; // Return default if header not found or value is null/undefined
+             }
+
 
             // --- Core Logic Functions ---
 
-            // Generic function to process fetched CSV text
             function processCsvData(csvText, sourceDescription) {
                 if (!csvText) {
                      throw new Error(`Fetched data (${sourceDescription}) is empty.`);
                 }
 
-                // Parse CSV using SheetJS
                 const workbook = XLSX.read(csvText, { type: 'string', raw: true });
                 const sheetName = workbook.SheetNames[0];
                 if (!sheetName) throw new Error(`Could not parse CSV data (${sourceDescription}).`);
 
-                rawData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: null }); // Use null for empty values
+                rawData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: null });
                  if (!rawData.length) throw new Error(`CSV data is empty after parsing (${sourceDescription}).`);
 
-                // Find actual header keys (case-insensitive)
+                // --- Header Mapping ---
                 const headers = Object.keys(rawData[0] || {});
-                let missingKeys = [];
-                headerMap = {}; // Reset header map before finding new ones
-                REQ_KEYS.forEach(key => {
+                headerMap = {}; // Reset header map
+                let missingCriticalKeys = [];
+                let missingOptionalKeyNames = [];
+
+                // Find critical keys
+                CRITICAL_KEYS.forEach(key => {
                     const foundKey = findHeaderKey(headers, key);
                     if (foundKey) {
                         headerMap[key] = foundKey;
                     } else {
-                        missingKeys.push(key.toUpperCase());
+                        missingCriticalKeys.push(key.toUpperCase());
                     }
                 });
 
-                // Check if the TOTAL_VOTER_KEY was actually found
-                if (!headerMap[TOTAL_VOTER_KEY]) {
-                     console.warn(`Warning: Column '${TOTAL_VOTER_KEY}' not found. Voter count will not be available.`);
-                     // Optionally inform the user via statusLabel or alert
-                     // statusLabel.textContent += ` Warning: Column '${TOTAL_VOTER_KEY}' not found.`;
+                // Check critical keys
+                if (missingCriticalKeys.length > 0) {
+                    throw new Error(`Required columns not found in ${sourceDescription}: ${missingCriticalKeys.join(', ')}`);
                 }
 
-                // Check *other* required keys (exclude TOTAL_VOTER_KEY for the main error if it's missing)
-                const criticalMissingKeys = missingKeys.filter(key => key !== TOTAL_VOTER_KEY.toUpperCase());
-                if (criticalMissingKeys.length > 0) {
-                    throw new Error(`Required columns not found in ${sourceDescription}: ${criticalMissingKeys.join(', ')}`);
-                }
+                // Find optional keys and note if missing
+                OPTIONAL_KEYS.forEach(key => {
+                    const foundKey = findHeaderKey(headers, key);
+                    if (foundKey) {
+                        headerMap[key] = foundKey; // Store the actual found header name
+                    } else {
+                        missingOptionalKeyNames.push(key); // Store the original key name for warning
+                         console.warn(`Warning: Optional column '${key}' not found. Corresponding info will display as 'N/A'.`);
+                        // headerMap[key] will remain undefined; getOptionalValue will handle this
+                    }
+                });
+                // --- End Header Mapping ---
 
+                processData(); // Process data into hierarchy and extract details
 
-                // Process data into hierarchy AND extract candidate/voter data
-                processData(); // Re-uses the existing processing logic
-
-                // Populate the first dropdown
                 populateZpcDropdown();
-                statusLabel.textContent = `Loaded ${rawData.length} rows from ${sourceDescription}. Select ZPC to begin.`;
+                let statusMsg = `Loaded ${rawData.length} rows from ${sourceDescription}. Select ZPC to begin.`;
+                if (missingOptionalKeyNames.length > 0) {
+                     statusMsg += ` (Note: Some optional info columns not found: ${missingOptionalKeyNames.join(', ')})`;
+                }
+                statusLabel.textContent = statusMsg;
             }
 
 
@@ -391,51 +440,44 @@
                 }
                  if (!url.includes('/pub?') || !url.includes('output=csv')) {
                      console.warn("URL format might be incorrect. Expected a Google Sheet 'Publish to web' CSV link. Attempting to load anyway...");
-                     // Optionally show a less severe warning to the user
-                     // statusLabel.textContent = "Warning: URL format might be incorrect. Trying to load...";
                  }
 
                 setLoadingState(true);
-                hierarchy.clear(); // Clear previous hierarchy
-                psCandidateData.clear(); // Clear previous candidate data
-                headerMap = {}; // Clear previous headers
+                hierarchy.clear();
+                psDataMap.clear(); // Use the renamed map
+                headerMap = {};
 
                 try {
                     console.log("Fetching URL:", url);
-                    const response = await fetch(url, { cache: 'no-store' }); // Use no-store to prevent caching issues
+                    const response = await fetch(url, { cache: 'no-store' });
 
                     if (!response.ok) {
                         throw new Error(`Failed to fetch URL. Status: ${response.status} ${response.statusText}. Check URL & permissions.`);
                     }
                     const csvText = await response.text();
-                    processCsvData(csvText, "Google Sheet URL"); // Use the generic processor
+                    processCsvData(csvText, "Google Sheet URL");
 
                 } catch (error) {
                      console.error("URL Loading error:", error);
                      statusLabel.textContent = `Error: ${error.message}`;
                      alert(`URL Loading Error:\n${error.message}`);
-                     resetAllDropdowns(); // Reset on error
+                     resetAllDropdowns();
                 } finally {
                     setLoadingState(false);
                 }
             }
 
-            // New Handler for loading local CSV
             async function handleLocalCsvLoad() {
                 setLoadingState(true);
-                hierarchy.clear(); // Clear previous data
-                psCandidateData.clear();
+                hierarchy.clear();
+                psDataMap.clear(); // Use the renamed map
                 headerMap = {};
 
                 try {
                     console.log("Fetching local file:", LOCAL_CSV_FILENAME);
-                    // Fetch the local file. IMPORTANT: This requires the HTML file to be served
-                    // by a web server (even a simple local one like Python's http.server or VS Code Live Server).
-                    // It will likely fail if you open the HTML directly from the filesystem (file:///).
                     const response = await fetch(LOCAL_CSV_FILENAME, { cache: 'no-store' });
 
                     if (!response.ok) {
-                        // Provide a more helpful error message for common local file issues
                         if (response.status === 404) {
                              throw new Error(`Failed to fetch local file '${LOCAL_CSV_FILENAME}'. Status: ${response.status} ${response.statusText}. Make sure the file exists in the same directory as the HTML file and that you are running this page from a web server (not file:/// protocol).`);
                         } else {
@@ -443,14 +485,13 @@
                         }
                     }
                     const csvText = await response.text();
-                    processCsvData(csvText, `local file '${LOCAL_CSV_FILENAME}'`); // Use the generic processor
+                    processCsvData(csvText, `local file '${LOCAL_CSV_FILENAME}'`);
 
                 } catch (error) {
                      console.error("Local CSV Loading error:", error);
                      statusLabel.textContent = `Error: ${error.message}`;
-                     // Use alert for more prominent error display, especially for local file issues
                      alert(`Local CSV Loading Error:\n${error.message}`);
-                     resetAllDropdowns(); // Reset on error
+                     resetAllDropdowns();
                 } finally {
                     setLoadingState(false);
                 }
@@ -458,84 +499,75 @@
 
 
              function processData() {
-                 hierarchy.clear(); // Ensure it's empty before processing
-                 psCandidateData.clear(); // Clear candidate data map too
+                 hierarchy.clear();
+                 psDataMap.clear(); // Use the renamed map
 
-                 const processedPsNames = new Set(); // To handle potential duplicates if hierarchy levels are identical but candidates differ
+                 const processedPsNames = new Set();
 
-                 rawData.forEach((row, index) => { // Added index for logging
-                     // Check if row is an object, skip if not (e.g., empty rows parsed weirdly)
-                     if (typeof row !== 'object' || row === null) {
-                         // console.warn(`Skipping invalid row data at index ${index}:`, row);
-                         return;
-                     }
-                     // Get hierarchy keys using the mapped header names
+                 rawData.forEach((row, index) => {
+                     if (typeof row !== 'object' || row === null) return;
+
                      const zpcName = formatNoName(row[headerMap[ZPC_NO_KEY]], row[headerMap[ZPC_KEY]]);
                      const apName = formatNoName(row[headerMap[AP_NO_KEY]], row[headerMap[AP_KEY]]);
                      const gpName = formatNoName(row[headerMap[GP_NO_KEY]], row[headerMap[GP_KEY]]);
                      const wardName = formatNoName(row[headerMap[WARD_NO_KEY]], row[headerMap[WARD_KEY]]);
                      const psName = formatNoName(row[headerMap[PS_NO_KEY]], row[headerMap[PS_KEY]]);
 
-                     // Build Hierarchy (only if all levels have names)
                      if (zpcName && apName && gpName && wardName && psName) {
+                         // Build Hierarchy
                          if (!hierarchy.has(zpcName)) hierarchy.set(zpcName, new Map());
                          const zpcMap = hierarchy.get(zpcName);
-
                          if (!zpcMap.has(apName)) zpcMap.set(apName, new Map());
                          const apMap = zpcMap.get(apName);
-
                          if (!apMap.has(gpName)) apMap.set(gpName, new Map());
                          const gpMap = apMap.get(gpName);
-
                          if (!gpMap.has(wardName)) gpMap.set(wardName, new Set());
                          const wardSet = gpMap.get(wardName);
-
                          wardSet.add(psName);
 
-                         // Store Candidate and Voter Data (using the formatted psName as the key)
-                         // Only store the first occurrence for a given PS name to avoid overwriting
+                         // Store PS specific Data (Candidates, Voters, Officers etc.) - Once per PS Name
                          if (!processedPsNames.has(psName)) {
-                             // ADDED: Extract voter count
-                             const voterCountHeader = headerMap[TOTAL_VOTER_KEY]; // Get the actual header name found
-                             let totalVoters = 'N/A'; // Default value
+                             // Extract Total Voters specifically, handling potential non-numeric
+                             let totalVoters = 'N/A';
+                             const voterCountHeader = headerMap[TOTAL_VOTER_KEY];
                              if (voterCountHeader && row[voterCountHeader] !== null && row[voterCountHeader] !== undefined) {
                                  const rawVoterCount = String(row[voterCountHeader]).trim();
-                                 // Try to parse as integer, handle potential non-numeric values gracefully
                                  const parsedVoters = parseInt(rawVoterCount, 10);
                                  if (!isNaN(parsedVoters)) {
                                      totalVoters = parsedVoters;
                                  } else if (rawVoterCount) {
-                                     // If it's not a number but not empty, keep the original string (e.g., "pending")
-                                     totalVoters = rawVoterCount;
+                                     totalVoters = rawVoterCount; // Keep non-numeric if present (e.g., "Pending")
                                  }
                              }
 
-                             // MODIFIED: Store candidates AND voter count
-                             const candidatesAndVoters = {
-                                 zpc: getCandidateNamesJS(row, ZPC_CANDIDATE_PREFIX),
-                                 ap: getCandidateNamesJS(row, AP_CANDIDATE_PREFIX),
-                                 ward: getCandidateNamesJS(row, WARD_CANDIDATE_PREFIX),
-                                 totalVoters: totalVoters // Store the processed voter count
+                             // MODIFIED: Store all relevant PS data in one object
+                             const psSpecificData = {
+                                 zpcCandidates: getCandidateNamesJS(row, ZPC_CANDIDATE_PREFIX),
+                                 apCandidates: getCandidateNamesJS(row, AP_CANDIDATE_PREFIX),
+                                 wardCandidates: getCandidateNamesJS(row, WARD_CANDIDATE_PREFIX),
+                                 totalVoters: totalVoters,
+                                 // Use helper to get optional values
+                                 big: getOptionalValue(row, BIG_KEY),
+                                 medium: getOptionalValue(row, MEDIUM_KEY),
+                                 zonalOfficer: getOptionalValue(row, ZONAL_OFFICER_KEY),
+                                 sectorOfficer: getOptionalValue(row, SECTOR_OFFICER_KEY),
+                                 authorisedOfficer: getOptionalValue(row, AUTHORISED_OFFICER_KEY)
                              };
-                             psCandidateData.set(psName, candidatesAndVoters);
+                             psDataMap.set(psName, psSpecificData); // Use the renamed map
                              processedPsNames.add(psName);
-                             // console.log(`Stored data for PS: ${psName}`, candidatesAndVoters); // Uncomment for debugging
                          }
                      } else {
-                        // Optionally log skipped rows
-                         // console.warn(`Skipping row at index ${index} due to missing hierarchy name(s):`, {zpcName, apName, gpName, wardName, psName}, "Raw Row:", row);
+                         // console.warn(`Skipping row index ${index} due to missing hierarchy name(s).`);
                      }
                  });
-                 // console.log("Hierarchy built:", hierarchy); // For debugging
-                 // console.log("Candidate/Voter data mapped:", psCandidateData); // For debugging
+
                  if (hierarchy.size === 0) {
-                     console.warn("Hierarchy map is empty after processing. Check data format and required columns.");
+                     console.warn("Hierarchy map is empty after processing.");
                      statusLabel.textContent += " Warning: No valid hierarchy data found. Check CSV format/content.";
                  }
              }
 
-            // --- Dropdown Population and Handling ---
-            // No changes needed in these handlers (handleZpcChange, handleApChange, etc.)
+            // --- Dropdown Population and Handling (No changes needed below this line for functionality) ---
 
             function populateZpcDropdown() {
                 const zpcNames = Array.from(hierarchy.keys());
@@ -543,7 +575,7 @@
                 resetDropdown(apSelect, 'Select AP');
                 resetDropdown(gpSelect, 'Select GP');
                 resetDropdown(wardSelect, 'Select Ward');
-                resetDropdown(psSelect, 'Select PS'); // This calls clearAndHideCandidates implicitly
+                resetDropdown(psSelect, 'Select PS'); // This calls clearAndHideDisplay implicitly
             }
 
             function handleZpcChange() {
@@ -551,7 +583,7 @@
                 resetDropdown(apSelect, 'Select AP');
                 resetDropdown(gpSelect, 'Select GP');
                 resetDropdown(wardSelect, 'Select Ward');
-                resetDropdown(psSelect, 'Select PS'); // Clears subsequent dropdowns and candidates
+                resetDropdown(psSelect, 'Select PS');
 
                 if (selectedZpc && hierarchy.has(selectedZpc)) {
                     const apMap = hierarchy.get(selectedZpc);
@@ -565,7 +597,7 @@
                  const selectedAp = apSelect.value;
                  resetDropdown(gpSelect, 'Select GP');
                  resetDropdown(wardSelect, 'Select Ward');
-                 resetDropdown(psSelect, 'Select PS'); // Clears subsequent dropdowns and candidates
+                 resetDropdown(psSelect, 'Select PS');
 
                  if (selectedZpc && selectedAp && hierarchy.has(selectedZpc) && hierarchy.get(selectedZpc).has(selectedAp)) {
                      const gpMap = hierarchy.get(selectedZpc).get(selectedAp);
@@ -579,7 +611,7 @@
                  const selectedAp = apSelect.value;
                  const selectedGp = gpSelect.value;
                  resetDropdown(wardSelect, 'Select Ward');
-                 resetDropdown(psSelect, 'Select PS'); // Clears subsequent dropdowns and candidates
+                 resetDropdown(psSelect, 'Select PS');
 
                   if (selectedZpc && selectedAp && selectedGp &&
                       hierarchy.has(selectedZpc) &&
@@ -596,7 +628,7 @@
                  const selectedAp = apSelect.value;
                  const selectedGp = gpSelect.value;
                  const selectedWard = wardSelect.value;
-                 resetDropdown(psSelect, 'Select PS'); // Clears subsequent dropdowns and candidates
+                 resetDropdown(psSelect, 'Select PS');
 
                  if (selectedZpc && selectedAp && selectedGp && selectedWard &&
                      hierarchy.has(selectedZpc) &&
@@ -609,28 +641,27 @@
                  }
              }
 
-             // --- Candidate Display Logic ---
-             // MODIFIED: Added handling for voter count display
+             // --- Display Logic ---
 
              function handlePsSelectChange() {
                  const selectedPs = psSelect.value;
-                 if (selectedPs && psCandidateData.has(selectedPs)) {
-                     const data = psCandidateData.get(selectedPs); // Now contains candidates and voters
-                     displayCandidatesAndVoters(data); // MODIFIED: Call updated display function
+                 if (selectedPs && psDataMap.has(selectedPs)) { // Use renamed map
+                     const data = psDataMap.get(selectedPs); // Get the full data object
+                     displayPsDetails(data); // Call the updated display function
                  } else {
-                     clearAndHideCandidates();
+                     clearAndHideDisplay();
                  }
              }
 
-             // MODIFIED: Function renamed and updated to handle voter count
-             function displayCandidatesAndVoters(data) {
+             // MODIFIED: Updated display function
+             function displayPsDetails(data) {
                  if (!data) {
-                    clearAndHideCandidates();
+                    clearAndHideDisplay();
                     return;
                  }
-                 // Helper to populate a single list
+                 // Helper to populate a candidate list
                  const populateList = (listElement, candidateArray) => {
-                     listElement.innerHTML = ''; // Clear previous items
+                     listElement.innerHTML = '';
                      if (candidateArray && candidateArray.length > 0) {
                          candidateArray.forEach(name => {
                              const li = document.createElement('li');
@@ -646,30 +677,42 @@
                  };
 
                  // Populate candidate lists
-                 populateList(zpcCandidateList, data.zpc);
-                 populateList(apCandidateList, data.ap);
-                 populateList(wardCandidateList, data.ward);
+                 populateList(zpcCandidateList, data.zpcCandidates);
+                 populateList(apCandidateList, data.apCandidates);
+                 populateList(wardCandidateList, data.wardCandidates);
 
-                 // ADDED: Display the total voter count
-                 psVoterCountElement.textContent = `Total Number of Voters: ${data.totalVoters ?? 'N/A'}`;
+                 // Display PS Info Section
+                 psVoterCountElement.textContent = `Total Voters: ${data.totalVoters ?? 'N/A'}`;
+                 // ADDED: Display new info fields
+                 psBigInfoElement.textContent = `Big: ${data.big ?? 'N/A'}`;
+                 psMediumInfoElement.textContent = `Medium: ${data.medium ?? 'N/A'}`;
+                 psZonalOfficerInfoElement.textContent = `Zonal Officer: ${data.zonalOfficer ?? 'N/A'}`;
+                 psSectorOfficerInfoElement.textContent = `Sector Officer: ${data.sectorOfficer ?? 'N/A'}`;
+                 psAuthorisedOfficerInfoElement.textContent = `Authorised Officer: ${data.authorisedOfficer ?? 'N/A'}`;
 
-                 candidateDisplayDiv.classList.remove('hidden'); // Show the display area
+                 candidateDisplayDiv.classList.remove('hidden'); // Show the whole display area
              }
 
-             // MODIFIED: Clear the voter count element as well
-             function clearAndHideCandidates() {
+             // MODIFIED: Clear all display elements
+             function clearAndHideDisplay() {
+                 // Clear candidate lists
                  zpcCandidateList.innerHTML = '';
                  apCandidateList.innerHTML = '';
                  wardCandidateList.innerHTML = '';
-                 psVoterCountElement.textContent = ''; // ADDED: Clear voter count
+                 // Clear info section
+                 psVoterCountElement.textContent = '';
+                 psBigInfoElement.textContent = ''; // ADDED
+                 psMediumInfoElement.textContent = ''; // ADDED
+                 psZonalOfficerInfoElement.textContent = ''; // ADDED
+                 psSectorOfficerInfoElement.textContent = ''; // ADDED
+                 psAuthorisedOfficerInfoElement.textContent = ''; // ADDED
+
                  candidateDisplayDiv.classList.add('hidden'); // Hide the display area
              }
 
             // --- Initial State ---
-            resetAllDropdowns(); // Includes clearing/hiding candidates
-
-            // auto click `load local csv`
-            loadLocalButton.click(); // Simulate a click to load the local CSV on page load
+            resetAllDropdowns();
+            loadLocalButton.click(); // Auto-load local CSV
 
         }); // End DOMContentLoaded
     </script>
