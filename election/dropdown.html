@@ -684,11 +684,11 @@
                  // Display PS Info Section
                  psVoterCountElement.textContent = `Total Voters: ${data.totalVoters ?? 'N/A'}`;
                  // ADDED: Display new info fields
-                 psBigInfoElement.textContent = `Big: ${data.big ?? 'N/A'}`;
-                 psMediumInfoElement.textContent = `Medium: ${data.medium ?? 'N/A'}`;
-                 psZonalOfficerInfoElement.textContent = `Zonal Officer: ${data.zonalOfficer ?? 'N/A'}`;
-                 psSectorOfficerInfoElement.textContent = `Sector Officer: ${data.sectorOfficer ?? 'N/A'}`;
-                 psAuthorisedOfficerInfoElement.textContent = `Authorised Officer: ${data.authorisedOfficer ?? 'N/A'}`;
+                 psBigInfoElement.textContent = `Ballot Box Big: ${data.big ?? 'N/A'}`;
+                 psMediumInfoElement.textContent = `Ballot Box Medium: ${data.medium ?? 'N/A'}`;
+                 psZonalOfficerInfoElement.textContent = `ZO: ${data.zonalOfficer ?? 'N/A'}`;
+                 psSectorOfficerInfoElement.textContent = `SO: ${data.sectorOfficer ?? 'N/A'}`;
+                 psAuthorisedOfficerInfoElement.textContent = `AO: ${data.authorisedOfficer ?? 'N/A'}`;
 
                  candidateDisplayDiv.classList.remove('hidden'); // Show the whole display area
              }
