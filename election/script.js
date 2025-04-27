@@ -198,7 +198,7 @@ document.addEventListener('DOMContentLoaded', async () => { // Make the listener
      * Handles loading the default local CSV file.
      */
     async function loadDefaultCsv() {
-        const defaultFilename = '24 april data.csv';
+        const defaultFilename = '27 april data.csv';
         if (!startLoading(`Loading default data (${defaultFilename})...`)) return;
 
         try {
