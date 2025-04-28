@@ -128,12 +128,12 @@
         </div>
 
         <div class="loader">
-            <input type="text" id="googleSheetUrl" placeholder="Paste Google Sheet 'Publish to web' CSV Link...">
+            <input type="text" id="googleSheetUrl" placeholder="Paste Google Sheet 'Publish to web' TSV Link...">
             <button id="loadFromUrlButton" class="button">Load from URL</button>
-            <button id="loadLocalCsvButton" class="button">Load Local CSV</button> <!-- Added Button -->
+            <button id="loadLocalTsvButton" class="button">Load Local TSV</button> <!-- Changed Button ID and Text -->
         </div>
         <!-- Updated Status Message -->
-        <div id="status">Enter a Google Sheet URL and click 'Load from URL', or click 'Load Local CSV' to load '24 april data.csv'.</div>
+        <div id="status">Enter a Google Sheet URL (ending in output=tsv) and click 'Load from URL', or click 'Load Local TSV' to load '27 april data.tsv'.</div>
 
         <div class="dropdown-container">
             <div>
@@ -205,7 +205,7 @@
             // --- DOM Elements ---
             const urlInput = document.getElementById('googleSheetUrl');
             const loadUrlButton = document.getElementById('loadFromUrlButton');
-            const loadLocalButton = document.getElementById('loadLocalCsvButton');
+            const loadLocalButton = document.getElementById('loadLocalTsvButton'); // Changed variable name
             const statusLabel = document.getElementById('status');
             const zpcSelect = document.getElementById('zpcSelect');
             const apSelect = document.getElementById('apSelect');
@@ -235,7 +235,7 @@
             let headerMap = {}; // To store actual header names found
 
             // --- Constants ---
-            const LOCAL_CSV_FILENAME = '27 april data.csv'; // Define local filename
+            const LOCAL_TSV_FILENAME = '27 april data.tsv'; // Changed Constant Name and Value
             // Hierarchy Keys
             const ZPC_KEY = 'zpc name';
             const AP_KEY = 'ap name';
@@ -277,7 +277,7 @@
 
             // --- Event Listeners ---
             loadUrlButton.addEventListener('click', handleUrlLoad);
-            loadLocalButton.addEventListener('click', handleLocalCsvLoad);
+            loadLocalButton.addEventListener('click', handleLocalTsvLoad); // Changed handler name
             zpcSelect.addEventListener('change', handleZpcChange);
             apSelect.addEventListener('change', handleApChange);
             gpSelect.addEventListener('change', handleGpChange);
@@ -375,17 +375,21 @@
 
             // --- Core Logic Functions ---
 
-            function processCsvData(csvText, sourceDescription) {
-                if (!csvText) {
+            // Renamed function and parameter, updated internal messages
+            function processTsvData(tsvText, sourceDescription) {
+                if (!tsvText) {
                      throw new Error(`Fetched data (${sourceDescription}) is empty.`);
                 }
 
-                const workbook = XLSX.read(csvText, { type: 'string', raw: true });
+                // SheetJS XLSX.read should be able to handle TSV when given as a string.
+                // No specific delimiter option needed here, relies on SheetJS auto-detection or
+                // the structure of the input string being recognizable TSV.
+                const workbook = XLSX.read(tsvText, { type: 'string', raw: true });
                 const sheetName = workbook.SheetNames[0];
-                if (!sheetName) throw new Error(`Could not parse CSV data (${sourceDescription}).`);
+                if (!sheetName) throw new Error(`Could not parse TSV data (${sourceDescription}). SheetJS did not find a sheet.`);
 
                 rawData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: null });
-                 if (!rawData.length) throw new Error(`CSV data is empty after parsing (${sourceDescription}).`);
+                 if (!rawData.length) throw new Error(`TSV data is empty after parsing (${sourceDescription}). Check file content/format.`);
 
                 // --- Header Mapping ---
                 const headers = Object.keys(rawData[0] || {});
@@ -435,11 +439,12 @@
             async function handleUrlLoad() {
                 const url = urlInput.value.trim();
                 if (!url) {
-                    alert("Please paste a Google Sheet 'Publish to web' CSV URL first.");
+                    alert("Please paste a Google Sheet 'Publish to web' TSV URL first.");
                     return;
                 }
-                 if (!url.includes('/pub?') || !url.includes('output=csv')) {
-                     console.warn("URL format might be incorrect. Expected a Google Sheet 'Publish to web' CSV link. Attempting to load anyway...");
+                 // Updated check for TSV output format
+                 if (!url.includes('/pub?') || !url.includes('output=tsv')) {
+                     console.warn("URL format might be incorrect. Expected a Google Sheet 'Publish to web' TSV link (ending in 'output=tsv'). Attempting to load anyway...");
                  }
 
                 setLoadingState(true);
@@ -454,8 +459,8 @@
                     if (!response.ok) {
                         throw new Error(`Failed to fetch URL. Status: ${response.status} ${response.statusText}. Check URL & permissions.`);
                     }
-                    const csvText = await response.text();
-                    processCsvData(csvText, "Google Sheet URL");
+                    const tsvText = await response.text(); // Changed variable name for clarity
+                    processTsvData(tsvText, "Google Sheet URL"); // Call the updated processor
 
                 } catch (error) {
                      console.error("URL Loading error:", error);
@@ -467,30 +472,31 @@
                 }
             }
 
-            async function handleLocalCsvLoad() {
+            // Renamed function to reflect TSV loading
+            async function handleLocalTsvLoad() {
                 setLoadingState(true);
                 hierarchy.clear();
                 psDataMap.clear(); // Use the renamed map
                 headerMap = {};
 
                 try {
-                    console.log("Fetching local file:", LOCAL_CSV_FILENAME);
-                    const response = await fetch(LOCAL_CSV_FILENAME, { cache: 'no-store' });
+                    console.log("Fetching local file:", LOCAL_TSV_FILENAME); // Use TSV filename constant
+                    const response = await fetch(LOCAL_TSV_FILENAME, { cache: 'no-store' }); // Use TSV filename
 
                     if (!response.ok) {
                         if (response.status === 404) {
-                             throw new Error(`Failed to fetch local file '${LOCAL_CSV_FILENAME}'. Status: ${response.status} ${response.statusText}. Make sure the file exists in the same directory as the HTML file and that you are running this page from a web server (not file:/// protocol).`);
+                             throw new Error(`Failed to fetch local file '${LOCAL_TSV_FILENAME}'. Status: ${response.status} ${response.statusText}. Make sure the file exists in the same directory as the HTML file and that you are running this page from a web server (not file:/// protocol).`);
                         } else {
-                            throw new Error(`Failed to fetch local file '${LOCAL_CSV_FILENAME}'. Status: ${response.status} ${response.statusText}.`);
+                            throw new Error(`Failed to fetch local file '${LOCAL_TSV_FILENAME}'. Status: ${response.status} ${response.statusText}.`);
                         }
                     }
-                    const csvText = await response.text();
-                    processCsvData(csvText, `local file '${LOCAL_CSV_FILENAME}'`);
+                    const tsvText = await response.text(); // Changed variable name
+                    processTsvData(tsvText, `local file '${LOCAL_TSV_FILENAME}'`); // Call updated processor
 
                 } catch (error) {
-                     console.error("Local CSV Loading error:", error);
+                     console.error("Local TSV Loading error:", error); // Updated error message context
                      statusLabel.textContent = `Error: ${error.message}`;
-                     alert(`Local CSV Loading Error:\n${error.message}`);
+                     alert(`Local TSV Loading Error:\n${error.message}`);
                      resetAllDropdowns();
                 } finally {
                     setLoadingState(false);
@@ -557,13 +563,13 @@
                              processedPsNames.add(psName);
                          }
                      } else {
-                         // console.warn(`Skipping row index ${index} due to missing hierarchy name(s).`);
+                         // console.warn(`Skipping row index ${index} due to missing hierarchy name(s). Check TSV format.`); // Hint at TSV format
                      }
                  });
 
                  if (hierarchy.size === 0) {
                      console.warn("Hierarchy map is empty after processing.");
-                     statusLabel.textContent += " Warning: No valid hierarchy data found. Check CSV format/content.";
+                     statusLabel.textContent += " Warning: No valid hierarchy data found. Check TSV format/content."; // Updated warning
                  }
              }
 
@@ -712,7 +718,7 @@
 
             // --- Initial State ---
             resetAllDropdowns();
-            loadLocalButton.click(); // Auto-load local CSV
+            loadLocalButton.click(); // Auto-load local TSV
 
         }); // End DOMContentLoaded
     </script>
