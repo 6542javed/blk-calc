@@ -108,6 +108,8 @@ document.addEventListener('DOMContentLoaded', async () => { // Make the listener
 
     /**
      * Handles loading local Excel file (selected via input).
+     * NOTE: This function remains unchanged as it primarily targets Excel files.
+     * SheetJS might auto-detect TSV/CSV dropped here, but the main change is for URL/default load.
      */
     function handleFileLoad(event) {
         const file = event.target.files[0];
@@ -118,9 +120,10 @@ document.addEventListener('DOMContentLoaded', async () => { // Make the listener
         reader.onload = (e) => {
             try {
                 const data = new Uint8Array(e.target.result);
+                // SheetJS attempts to auto-detect format when reading from buffer
                 const workbook = XLSX.read(data, { type: 'array' });
                 const sheetName = workbook.SheetNames[0];
-                if (!sheetName) throw new Error("Excel file has no sheets.");
+                if (!sheetName) throw new Error("File has no sheets or could not be parsed.");
                 rawData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
                 if (!rawData.length) throw new Error(`Sheet '${sheetName}' is empty.`);
                 const headers = Object.keys(rawData[0] || {});
@@ -131,7 +134,7 @@ document.addEventListener('DOMContentLoaded', async () => { // Make the listener
                 updateAllUIs();
                 statusLabel.textContent = `Loaded ${processedData.length} unique PS from: ${file.name}`;
             } catch (error) {
-                handleLoadingError(error, "Error processing Excel file");
+                handleLoadingError(error, `Error processing file "${file.name}"`);
             } finally {
                 endLoading();
             }
@@ -145,17 +148,18 @@ document.addEventListener('DOMContentLoaded', async () => { // Make the listener
     }
 
     /**
-     * Handles loading data from Google Sheet URL.
+     * Handles loading data from Google Sheet URL (expecting TSV format).
      */
     async function handleUrlLoad() {
         let url = googleSheetUrlInput.value.trim();
         if (!url) {
-            alert("Please paste a Google Sheet 'Publish to web' CSV URL first.");
+            alert("Please paste a Google Sheet 'Publish to web' TSV URL first."); // Changed alert message
             return;
         }
 
-        if (!url.includes('/pub?') || !url.includes('output=csv')) {
-             console.warn("URL format might be incorrect. Expected a Google Sheet 'Publish to web' CSV link (containing '/pub?' and 'output=csv'). Attempting to load anyway...");
+        // Updated check and warning message for TSV
+        if (!url.includes('/pub?') || !url.includes('output=tsv')) {
+             console.warn("URL format might be incorrect. Expected a Google Sheet 'Publish to web' TSV link (containing '/pub?' and 'output=tsv'). Attempting to load anyway...");
         }
 
         if (!startLoading(`Loading from URL...`)) return;
@@ -165,40 +169,40 @@ document.addEventListener('DOMContentLoaded', async () => { // Make the listener
             const response = await fetch(url, { cache: 'no-store' });
 
             if (!response.ok) {
-                throw new Error(`Failed to fetch data. Status: ${response.status} ${response.statusText}. Ensure the link is correct and published publicly.`);
+                throw new Error(`Failed to fetch data. Status: ${response.status} ${response.statusText}. Ensure the link is correct and published publicly as TSV.`);
             }
-            const csvText = await response.text();
-            if (!csvText) {
+            const tsvText = await response.text(); // Changed variable name
+            if (!tsvText) {
                  throw new Error("Fetched data is empty. Check the Google Sheet or link.");
             }
 
-            // Use SheetJS to parse the CSV string
-            const workbook = XLSX.read(csvText, { type: 'string', raw: true });
+            // Use SheetJS to parse the TSV string. It often auto-detects delimiters correctly when reading from a string.
+            const workbook = XLSX.read(tsvText, { type: 'string', raw: true }); // Changed variable name
             const sheetName = workbook.SheetNames[0];
-            if (!sheetName) throw new Error("Could not parse CSV data.");
+            if (!sheetName) throw new Error("Could not parse TSV data."); // Changed error message
             rawData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
-             if (!rawData.length) throw new Error("CSV data is empty after parsing.");
+             if (!rawData.length) throw new Error("TSV data is empty after parsing."); // Changed error message
 
             const headers = Object.keys(rawData[0] || {});
             const psNameHeader = headers.find(h => h.trim().toLowerCase() === 'ps name');
-            if (!psNameHeader) throw new Error("Required column 'PS Name' not found in the CSV data.");
+            if (!psNameHeader) throw new Error("Required column 'PS Name' not found in the TSV data."); // Changed error message
 
             processRawData(rawData, psNameHeader);
             updateAllUIs();
-            statusLabel.textContent = `Loaded ${processedData.length} unique PS from URL.`;
+            statusLabel.textContent = `Loaded ${processedData.length} unique PS from URL (TSV).`; // Updated status
 
         } catch (error) {
-             handleLoadingError(error, "Error loading from URL");
+             handleLoadingError(error, "Error loading from URL (TSV)"); // Updated context
         } finally {
             endLoading();
         }
     }
 
     /**
-     * Handles loading the default local CSV file.
+     * Handles loading the default local TSV file.
      */
-    async function loadDefaultCsv() {
-        const defaultFilename = '27 april data.csv';
+    async function loadDefaultTsv() { // Renamed function
+        const defaultFilename = '27 april data.tsv'; // Changed default filename
         if (!startLoading(`Loading default data (${defaultFilename})...`)) return;
 
         try {
@@ -207,28 +211,28 @@ document.addEventListener('DOMContentLoaded', async () => { // Make the listener
             const response = await fetch(defaultFilename, { cache: 'no-store' }); // Add cache control here too
 
             if (!response.ok) {
-                // File not found or other server error (less likely for local file)
+                // File not found or other server error
                 if (response.status === 404) {
                     throw new Error(`Default file '${defaultFilename}' not found in the same directory as the HTML file.`);
                 } else {
                     throw new Error(`Failed to fetch default file. Status: ${response.status} ${response.statusText}`);
                 }
             }
-            const csvText = await response.text();
-            if (!csvText) {
+            const tsvText = await response.text(); // Changed variable name
+            if (!tsvText) {
                  throw new Error(`Default file '${defaultFilename}' is empty.`);
             }
 
-            // Use SheetJS to parse the CSV string
-            const workbook = XLSX.read(csvText, { type: 'string', raw: true });
+            // Use SheetJS to parse the TSV string
+            const workbook = XLSX.read(tsvText, { type: 'string', raw: true }); // Changed variable name
             const sheetName = workbook.SheetNames[0];
-            if (!sheetName) throw new Error("Could not parse CSV data from default file.");
+            if (!sheetName) throw new Error("Could not parse TSV data from default file."); // Changed error message
             rawData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
-             if (!rawData.length) throw new Error("Default CSV data is empty after parsing.");
+             if (!rawData.length) throw new Error("Default TSV data is empty after parsing."); // Changed error message
 
             const headers = Object.keys(rawData[0] || {});
             const psNameHeader = headers.find(h => h.trim().toLowerCase() === 'ps name');
-            if (!psNameHeader) throw new Error("Required column 'PS Name' not found in the default CSV data.");
+            if (!psNameHeader) throw new Error("Required column 'PS Name' not found in the default TSV data."); // Changed error message
 
             processRawData(rawData, psNameHeader);
             updateAllUIs();
@@ -239,8 +243,7 @@ document.addEventListener('DOMContentLoaded', async () => { // Make the listener
              // Use handleLoadingError, but provide a more specific context
              handleLoadingError(error, `Error loading default file (${defaultFilename})`);
              // Optionally, provide more user-friendly feedback if the default load fails
-             // e.g., statusLabel.textContent = `Could not load default data. Please load manually. Error: ${error.message}`;
-             // The current handleLoadingError already shows the error message.
+             // statusLabel.textContent = `Could not load default data. Please load manually. Error: ${error.message}`;
              console.warn("Default data load failed. User can load manually.");
         } finally {
             endLoading(); // Always end loading state, regardless of success/failure
@@ -298,9 +301,6 @@ document.addEventListener('DOMContentLoaded', async () => { // Make the listener
             processedRow.candidates.zpc = getCandidateNamesJS(rawRow, 'ZPM');
             processedRow.candidates.ap = getCandidateNamesJS(rawRow, 'APM');
             processedRow.candidates.ward = getCandidateNamesJS(rawRow, 'GPM');
-
-            // Handle potential case variations in keys like 'Nil'/ 'nil' during candidate name extraction
-            // (Already handled inside getCandidateNamesJS)
 
             // Ensure ballot calculation columns exist, using case-insensitive lookup
             const zpcFlag = processedRow.candidates.zpc.length >= 2 ? 1 : 0;
@@ -362,15 +362,14 @@ document.addEventListener('DOMContentLoaded', async () => { // Make the listener
      }
 
     // --- UI Update Functions (updateBallotTableUI, filterBallotTable, Tooltip Handlers, populatePsListUI, filterPsList, handlePsSelect, updateCandidateColumnsUI, clearCandidateColumnsUI - unchanged) ---
+    // --- These functions remain unchanged as they operate on the processedData, independent of the source format ---
     function updateBallotTableUI() {
         ballotTableBody.innerHTML = '';
-        // Total calculation moved to processRawData
         if (!processedData.length) {
             ballotSummaryLabel.textContent = 'No data loaded or processed.';
             return;
         }
         processedData.forEach((row, index) => {
-            // totalAllBallots += row.ballotInfo.psTotal; // No need to recalculate here
             const tr = document.createElement('tr');
             tr.dataset.rowIndex = index;
             tr.innerHTML = `
@@ -409,7 +408,6 @@ document.addEventListener('DOMContentLoaded', async () => { // Make the listener
                 const zpcText = rowData.candidates.zpc.length > 0 ? rowData.candidates.zpc.join(', ') : 'Uncontested or Nil';
                 const apText = rowData.candidates.ap.length > 0 ? rowData.candidates.ap.join(', ') : 'Uncontested or Nil';
                 const wardText = rowData.candidates.ward.length > 0 ? rowData.candidates.ward.join(', ') : 'Uncontested or Nil';
-                // Corrected tooltip text formatting
                 tooltipElement.innerHTML = `ZPC Candidates: ${zpcText}<br>AP Candidates:  ${apText}<br>Ward Candidates: ${wardText}`;
                 tooltipElement.style.display = 'block';
             } else { tooltipElement.style.display = 'none'; }
@@ -417,7 +415,6 @@ document.addEventListener('DOMContentLoaded', async () => { // Make the listener
     }
     function handleTableMouseOut(event) {
          const relatedTarget = event.relatedTarget;
-         // Improved check to prevent flickering when moving onto the tooltip itself
          if (!ballotTableBody.contains(relatedTarget) && !tooltipElement.contains(relatedTarget)) {
             tooltipElement.style.display = 'none';
          }
@@ -425,26 +422,15 @@ document.addEventListener('DOMContentLoaded', async () => { // Make the listener
     function handleTableMouseMove(event) {
         if (tooltipElement.style.display === 'block') {
             const xOffset = 15, yOffset = 10;
-             // Ensure tooltip stays within viewport boundaries (basic implementation)
              const viewportWidth = window.innerWidth;
              const viewportHeight = window.innerHeight;
-             const tooltipRect = tooltipElement.getBoundingClientRect(); // Get current size
-
+             const tooltipRect = tooltipElement.getBoundingClientRect();
              let left = event.pageX + xOffset;
              let top = event.pageY + yOffset;
-
-             // Adjust left position if tooltip goes off-screen right
-             if (left + tooltipRect.width > viewportWidth) {
-                 left = event.pageX - tooltipRect.width - xOffset;
-             }
-              // Adjust top position if tooltip goes off-screen bottom
-             if (top + tooltipRect.height > viewportHeight) {
-                 top = event.pageY - tooltipRect.height - yOffset;
-             }
-             // Prevent negative coordinates (going off top/left)
+             if (left + tooltipRect.width > viewportWidth) { left = event.pageX - tooltipRect.width - xOffset; }
+             if (top + tooltipRect.height > viewportHeight) { top = event.pageY - tooltipRect.height - yOffset; }
              if (left < 0) left = 0;
              if (top < 0) top = 0;
-
             tooltipElement.style.left = `${left}px`;
             tooltipElement.style.top = `${top}px`;
         }
@@ -504,6 +490,7 @@ document.addEventListener('DOMContentLoaded', async () => { // Make the listener
 
     /**
      * Exports the current data *visible* in the ballot table view to an Excel file.
+     * Unchanged - export format remains Excel.
      */
      function exportBallotTable() {
         if (!processedData.length) {
@@ -540,7 +527,6 @@ document.addEventListener('DOMContentLoaded', async () => { // Make the listener
 
         try {
             const ws = XLSX.utils.json_to_sheet(dataToExport, { header: headers });
-            // Optional: Adjust column widths (basic example)
             ws['!cols'] = [ {wch:5}, {wch:30}, {wch:15}, {wch:10}, {wch:18}, {wch:10}, {wch:18}, {wch:10}, {wch:18}, {wch:18} ]; // Adjust widths as needed
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Ballot Count Export");
@@ -552,7 +538,7 @@ document.addEventListener('DOMContentLoaded', async () => { // Make the listener
     }
 
 
-    // --- UI State Management ---
+    // --- UI State Management --- Unchanged
 
     /**
      * Switches the visible UI view.
@@ -582,28 +568,18 @@ document.addEventListener('DOMContentLoaded', async () => { // Make the listener
       * @param {boolean} loading - Is data currently being loaded?
       */
     function setControlsState(loading) {
-        // Check for data *after* potential loading completes (or before it starts)
         const hasData = !loading && processedData && processedData.length > 0;
-
-        // Primary load actions are disabled *only* when loading is active
         loadFromUrlButton.disabled = loading;
-        fileInput.disabled = loading; // Disable the input itself
-        if (fileInputLabel) {
-            fileInputLabel.classList.toggle('button-disabled', loading);
-        }
-
-        // Data-dependent actions are disabled if loading OR if no data exists
+        fileInput.disabled = loading;
+        if (fileInputLabel) { fileInputLabel.classList.toggle('button-disabled', loading); }
         exportButton.disabled = loading || !hasData;
         ballotSearchInput.disabled = loading || !hasData;
         ballotSearchButton.disabled = loading || !hasData;
         psSearchInput.disabled = loading || !hasData;
-        switchViewButton.disabled = loading || !hasData; // Disable view switching too if no data/loading
-
-        // Clear search fields if they are being disabled
+        switchViewButton.disabled = loading || !hasData;
         if (loading || !hasData) {
             ballotSearchInput.value = '';
             psSearchInput.value = '';
-            // Also clear visual filters if controls are disabled
             filterBallotTable();
             filterPsList();
         }
@@ -619,20 +595,13 @@ document.addEventListener('DOMContentLoaded', async () => { // Make the listener
          psNames = [];
          psNameToIndexMap = {};
          totalAllBallots = 0;
-         // isLoading should be reset by endLoading or startLoading
-
-         resetUIOnly(); // Clear UI tables/lists
+         resetUIOnly();
          ballotSummaryLabel.textContent = 'Load data to see totals.';
          googleSheetUrlInput.value = '';
          ballotSearchInput.value = '';
          psSearchInput.value = '';
-         // fileInput.value = ''; // Resetting this happens in endLoading
-
-         if (clearStatus) {
-            statusLabel.textContent = 'No data loaded.';
-         }
-
-         setControlsState(isLoading); // Update controls based on current loading state (usually false after reset)
+         if (clearStatus) { statusLabel.textContent = 'No data loaded.'; }
+         setControlsState(isLoading);
      }
 
 
@@ -642,12 +611,10 @@ document.addEventListener('DOMContentLoaded', async () => { // Make the listener
     setControlsState(true); // Start with controls disabled as we attempt default load
     statusLabel.textContent = 'Initializing...'; // Initial status
 
-    // 2. Attempt to load default data
-    await loadDefaultCsv(); // Wait for the default load attempt to finish
+    // 2. Attempt to load default TSV data
+    await loadDefaultTsv(); // Changed function call
 
-    // 3. Final state is set by endLoading() within loadDefaultCsv (or its error handler)
-    // setControlsState(false); // No longer needed here, handled by endLoading()
-
+    // 3. Final state is set by endLoading() within loadDefaultTsv (or its error handler)
     console.log("Initialization complete. Default data load attempted.");
 
 }); // End DOMContentLoaded
