@@ -188,12 +188,14 @@
             </div>
             <!-- PS Info Section -->
             <div id="psInfoSection">
-                 <p id="psVoterCount"></p> <!-- Moved Voter Count here -->
-                 <p id="psBigInfo"></p>       <!-- ADDED: Element for Big -->
-                 <p id="psMediumInfo"></p>    <!-- ADDED: Element for Medium -->
-                 <p id="psZonalOfficerInfo"></p> <!-- ADDED: Element for Zonal Officer -->
-                 <p id="psSectorOfficerInfo"></p> <!-- ADDED: Element for Sector Officer -->
-                 <p id="psAuthorisedOfficerInfo"></p> <!-- ADDED: Element for Authorised Officer -->
+                 <p id="psVoterCount"></p>       <!-- Moved Voter Count here -->
+                 <p id="psBigInfo"></p>
+                 <p id="psMediumInfo"></p>
+                 <p id="psZoneInfo"></p>         <!-- ADDED: Element for Zone -->
+                 <p id="psSectorInfo"></p>       <!-- ADDED: Element for Sector -->
+                 <p id="psZonalOfficerInfo"></p>
+                 <p id="psSectorOfficerInfo"></p>
+                 <p id="psAuthorisedOfficerInfo"></p>
             </div>
         </div>
         <!-- End Candidate Display Area -->
@@ -205,7 +207,7 @@
             // --- DOM Elements ---
             const urlInput = document.getElementById('googleSheetUrl');
             const loadUrlButton = document.getElementById('loadFromUrlButton');
-            const loadLocalButton = document.getElementById('loadLocalTsvButton'); // Changed variable name
+            const loadLocalButton = document.getElementById('loadLocalTsvButton');
             const statusLabel = document.getElementById('status');
             const zpcSelect = document.getElementById('zpcSelect');
             const apSelect = document.getElementById('apSelect');
@@ -219,9 +221,11 @@
             const apCandidateList = document.getElementById('apCandidateList');
             const wardCandidateList = document.getElementById('wardCandidateList');
             const psVoterCountElement = document.getElementById('psVoterCount');
-            // ADDED: Elements for new info fields
+            // Elements for PS info fields
             const psBigInfoElement = document.getElementById('psBigInfo');
             const psMediumInfoElement = document.getElementById('psMediumInfo');
+            const psZoneInfoElement = document.getElementById('psZoneInfo');               // ADDED
+            const psSectorInfoElement = document.getElementById('psSectorInfo');           // ADDED
             const psZonalOfficerInfoElement = document.getElementById('psZonalOfficerInfo');
             const psSectorOfficerInfoElement = document.getElementById('psSectorOfficerInfo');
             const psAuthorisedOfficerInfoElement = document.getElementById('psAuthorisedOfficerInfo');
@@ -230,12 +234,11 @@
             // --- Global State ---
             let rawData = [];
             let hierarchy = new Map(); // Map<zpc, Map<ap, Map<gp, Map<ward, Set<ps>>>>>
-            // MODIFIED: psDataMap now stores an object with candidates and various PS info fields
             let psDataMap = new Map();
             let headerMap = {}; // To store actual header names found
 
             // --- Constants ---
-            const LOCAL_TSV_FILENAME = '27 april data.tsv'; // Changed Constant Name and Value
+            const LOCAL_TSV_FILENAME = '27 april data.tsv';
             // Hierarchy Keys
             const ZPC_KEY = 'zpc name';
             const AP_KEY = 'ap name';
@@ -253,11 +256,13 @@
             const WARD_CANDIDATE_PREFIX = 'GPM';
             // PS Info Keys (treat these as optional)
             const TOTAL_VOTER_KEY = 'total number of voter';
-            const BIG_KEY = 'Big'; // ADDED
-            const MEDIUM_KEY = 'Medium'; // ADDED
-            const ZONAL_OFFICER_KEY = 'Zonal Officer'; // ADDED
-            const SECTOR_OFFICER_KEY = 'Sector Officer'; // ADDED
-            const AUTHORISED_OFFICER_KEY = 'Authorised Officer'; // ADDED
+            const BIG_KEY = 'Big';
+            const MEDIUM_KEY = 'Medium';
+            const ZONE_KEY = 'Zone';                     // ADDED: Key for Zone Number
+            const SECTOR_KEY = 'Sector';                 // ADDED: Key for Sector Number
+            const ZONAL_OFFICER_KEY = 'Zonal Officer';
+            const SECTOR_OFFICER_KEY = 'Sector Officer';
+            const AUTHORISED_OFFICER_KEY = 'Authorised Officer';
 
             // Critical keys needed for hierarchy/basic function
             const CRITICAL_KEYS = [
@@ -269,6 +274,8 @@
                 TOTAL_VOTER_KEY,
                 BIG_KEY,
                 MEDIUM_KEY,
+                ZONE_KEY,                       // ADDED
+                SECTOR_KEY,                     // ADDED
                 ZONAL_OFFICER_KEY,
                 SECTOR_OFFICER_KEY,
                 AUTHORISED_OFFICER_KEY
@@ -277,7 +284,7 @@
 
             // --- Event Listeners ---
             loadUrlButton.addEventListener('click', handleUrlLoad);
-            loadLocalButton.addEventListener('click', handleLocalTsvLoad); // Changed handler name
+            loadLocalButton.addEventListener('click', handleLocalTsvLoad);
             zpcSelect.addEventListener('change', handleZpcChange);
             apSelect.addEventListener('change', handleApChange);
             gpSelect.addEventListener('change', handleGpChange);
@@ -375,15 +382,11 @@
 
             // --- Core Logic Functions ---
 
-            // Renamed function and parameter, updated internal messages
             function processTsvData(tsvText, sourceDescription) {
                 if (!tsvText) {
                      throw new Error(`Fetched data (${sourceDescription}) is empty.`);
                 }
 
-                // SheetJS XLSX.read should be able to handle TSV when given as a string.
-                // No specific delimiter option needed here, relies on SheetJS auto-detection or
-                // the structure of the input string being recognizable TSV.
                 const workbook = XLSX.read(tsvText, { type: 'string', raw: true });
                 const sheetName = workbook.SheetNames[0];
                 if (!sheetName) throw new Error(`Could not parse TSV data (${sourceDescription}). SheetJS did not find a sheet.`);
@@ -420,7 +423,6 @@
                     } else {
                         missingOptionalKeyNames.push(key); // Store the original key name for warning
                          console.warn(`Warning: Optional column '${key}' not found. Corresponding info will display as 'N/A'.`);
-                        // headerMap[key] will remain undefined; getOptionalValue will handle this
                     }
                 });
                 // --- End Header Mapping ---
@@ -442,14 +444,13 @@
                     alert("Please paste a Google Sheet 'Publish to web' TSV URL first.");
                     return;
                 }
-                 // Updated check for TSV output format
                  if (!url.includes('/pub?') || !url.includes('output=tsv')) {
                      console.warn("URL format might be incorrect. Expected a Google Sheet 'Publish to web' TSV link (ending in 'output=tsv'). Attempting to load anyway...");
                  }
 
                 setLoadingState(true);
                 hierarchy.clear();
-                psDataMap.clear(); // Use the renamed map
+                psDataMap.clear();
                 headerMap = {};
 
                 try {
@@ -459,8 +460,8 @@
                     if (!response.ok) {
                         throw new Error(`Failed to fetch URL. Status: ${response.status} ${response.statusText}. Check URL & permissions.`);
                     }
-                    const tsvText = await response.text(); // Changed variable name for clarity
-                    processTsvData(tsvText, "Google Sheet URL"); // Call the updated processor
+                    const tsvText = await response.text();
+                    processTsvData(tsvText, "Google Sheet URL");
 
                 } catch (error) {
                      console.error("URL Loading error:", error);
@@ -472,16 +473,15 @@
                 }
             }
 
-            // Renamed function to reflect TSV loading
             async function handleLocalTsvLoad() {
                 setLoadingState(true);
                 hierarchy.clear();
-                psDataMap.clear(); // Use the renamed map
+                psDataMap.clear();
                 headerMap = {};
 
                 try {
-                    console.log("Fetching local file:", LOCAL_TSV_FILENAME); // Use TSV filename constant
-                    const response = await fetch(LOCAL_TSV_FILENAME, { cache: 'no-store' }); // Use TSV filename
+                    console.log("Fetching local file:", LOCAL_TSV_FILENAME);
+                    const response = await fetch(LOCAL_TSV_FILENAME, { cache: 'no-store' });
 
                     if (!response.ok) {
                         if (response.status === 404) {
@@ -490,11 +490,11 @@
                             throw new Error(`Failed to fetch local file '${LOCAL_TSV_FILENAME}'. Status: ${response.status} ${response.statusText}.`);
                         }
                     }
-                    const tsvText = await response.text(); // Changed variable name
-                    processTsvData(tsvText, `local file '${LOCAL_TSV_FILENAME}'`); // Call updated processor
+                    const tsvText = await response.text();
+                    processTsvData(tsvText, `local file '${LOCAL_TSV_FILENAME}'`);
 
                 } catch (error) {
-                     console.error("Local TSV Loading error:", error); // Updated error message context
+                     console.error("Local TSV Loading error:", error);
                      statusLabel.textContent = `Error: ${error.message}`;
                      alert(`Local TSV Loading Error:\n${error.message}`);
                      resetAllDropdowns();
@@ -506,7 +506,7 @@
 
              function processData() {
                  hierarchy.clear();
-                 psDataMap.clear(); // Use the renamed map
+                 psDataMap.clear();
 
                  const processedPsNames = new Set();
 
@@ -531,7 +531,7 @@
                          const wardSet = gpMap.get(wardName);
                          wardSet.add(psName);
 
-                         // Store PS specific Data (Candidates, Voters, Officers etc.) - Once per PS Name
+                         // Store PS specific Data - Once per PS Name
                          if (!processedPsNames.has(psName)) {
                              // Extract Total Voters specifically, handling potential non-numeric
                              let totalVoters = 'N/A';
@@ -542,11 +542,11 @@
                                  if (!isNaN(parsedVoters)) {
                                      totalVoters = parsedVoters;
                                  } else if (rawVoterCount) {
-                                     totalVoters = rawVoterCount; // Keep non-numeric if present (e.g., "Pending")
+                                     totalVoters = rawVoterCount;
                                  }
                              }
 
-                             // MODIFIED: Store all relevant PS data in one object
+                             // Store all relevant PS data in one object
                              const psSpecificData = {
                                  zpcCandidates: getCandidateNamesJS(row, ZPC_CANDIDATE_PREFIX),
                                  apCandidates: getCandidateNamesJS(row, AP_CANDIDATE_PREFIX),
@@ -555,25 +555,27 @@
                                  // Use helper to get optional values
                                  big: getOptionalValue(row, BIG_KEY),
                                  medium: getOptionalValue(row, MEDIUM_KEY),
+                                 zone: getOptionalValue(row, ZONE_KEY),         // ADDED
+                                 sector: getOptionalValue(row, SECTOR_KEY),     // ADDED
                                  zonalOfficer: getOptionalValue(row, ZONAL_OFFICER_KEY),
                                  sectorOfficer: getOptionalValue(row, SECTOR_OFFICER_KEY),
                                  authorisedOfficer: getOptionalValue(row, AUTHORISED_OFFICER_KEY)
                              };
-                             psDataMap.set(psName, psSpecificData); // Use the renamed map
+                             psDataMap.set(psName, psSpecificData);
                              processedPsNames.add(psName);
                          }
                      } else {
-                         // console.warn(`Skipping row index ${index} due to missing hierarchy name(s). Check TSV format.`); // Hint at TSV format
+                         // console.warn(`Skipping row index ${index} due to missing hierarchy name(s). Check TSV format.`);
                      }
                  });
 
                  if (hierarchy.size === 0) {
                      console.warn("Hierarchy map is empty after processing.");
-                     statusLabel.textContent += " Warning: No valid hierarchy data found. Check TSV format/content."; // Updated warning
+                     statusLabel.textContent += " Warning: No valid hierarchy data found. Check TSV format/content.";
                  }
              }
 
-            // --- Dropdown Population and Handling (No changes needed below this line for functionality) ---
+            // --- Dropdown Population and Handling ---
 
             function populateZpcDropdown() {
                 const zpcNames = Array.from(hierarchy.keys());
@@ -581,7 +583,7 @@
                 resetDropdown(apSelect, 'Select AP');
                 resetDropdown(gpSelect, 'Select GP');
                 resetDropdown(wardSelect, 'Select Ward');
-                resetDropdown(psSelect, 'Select PS'); // This calls clearAndHideDisplay implicitly
+                resetDropdown(psSelect, 'Select PS');
             }
 
             function handleZpcChange() {
@@ -651,15 +653,14 @@
 
              function handlePsSelectChange() {
                  const selectedPs = psSelect.value;
-                 if (selectedPs && psDataMap.has(selectedPs)) { // Use renamed map
-                     const data = psDataMap.get(selectedPs); // Get the full data object
-                     displayPsDetails(data); // Call the updated display function
+                 if (selectedPs && psDataMap.has(selectedPs)) {
+                     const data = psDataMap.get(selectedPs);
+                     displayPsDetails(data);
                  } else {
                      clearAndHideDisplay();
                  }
              }
 
-             // MODIFIED: Updated display function
              function displayPsDetails(data) {
                  if (!data) {
                     clearAndHideDisplay();
@@ -689,9 +690,11 @@
 
                  // Display PS Info Section
                  psVoterCountElement.textContent = `Total Voters: ${data.totalVoters ?? 'N/A'}`;
-                 // ADDED: Display new info fields
+                 // Display other info fields
                  psBigInfoElement.textContent = `Ballot Box Big: ${data.big ?? 'N/A'}`;
                  psMediumInfoElement.textContent = `Ballot Box Medium: ${data.medium ?? 'N/A'}`;
+                 psZoneInfoElement.textContent = `Zone: ${data.zone ?? 'N/A'}`;           // ADDED
+                 psSectorInfoElement.textContent = `Sector: ${data.sector ?? 'N/A'}`;       // ADDED
                  psZonalOfficerInfoElement.textContent = `ZO: ${data.zonalOfficer ?? 'N/A'}`;
                  psSectorOfficerInfoElement.textContent = `SO: ${data.sectorOfficer ?? 'N/A'}`;
                  psAuthorisedOfficerInfoElement.textContent = `AO: ${data.authorisedOfficer ?? 'N/A'}`;
@@ -699,7 +702,6 @@
                  candidateDisplayDiv.classList.remove('hidden'); // Show the whole display area
              }
 
-             // MODIFIED: Clear all display elements
              function clearAndHideDisplay() {
                  // Clear candidate lists
                  zpcCandidateList.innerHTML = '';
@@ -707,11 +709,13 @@
                  wardCandidateList.innerHTML = '';
                  // Clear info section
                  psVoterCountElement.textContent = '';
-                 psBigInfoElement.textContent = ''; // ADDED
-                 psMediumInfoElement.textContent = ''; // ADDED
-                 psZonalOfficerInfoElement.textContent = ''; // ADDED
-                 psSectorOfficerInfoElement.textContent = ''; // ADDED
-                 psAuthorisedOfficerInfoElement.textContent = ''; // ADDED
+                 psBigInfoElement.textContent = '';
+                 psMediumInfoElement.textContent = '';
+                 psZoneInfoElement.textContent = '';       // ADDED
+                 psSectorInfoElement.textContent = '';     // ADDED
+                 psZonalOfficerInfoElement.textContent = '';
+                 psSectorOfficerInfoElement.textContent = '';
+                 psAuthorisedOfficerInfoElement.textContent = '';
 
                  candidateDisplayDiv.classList.add('hidden'); // Hide the display area
              }
